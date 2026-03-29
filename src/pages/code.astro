@@ -1,0 +1,493 @@
+---
+import Base from '../layouts/Base.astro';
+const base = import.meta.env.BASE_URL;
+
+// Minimal Raft implementations — readable, annotated, not production-ready
+const pythonCode = `# raft.py — Minimal Raft node (single-process simulation)
+# Focuses on state transitions and the core data structures.
+# Not production-ready — no real networking, no persistence.
+
+import random
+import time
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Optional
+
+class State(Enum):
+    FOLLOWER  = "follower"
+    CANDIDATE = "candidate"
+    LEADER    = "leader"
+
+@dataclass
+class LogEntry:
+    term: int       # which term this entry was created in
+    command: str    # the actual command (e.g. "SET x=1")
+
+@dataclass
+class RaftNode:
+    id: int
+    peers: list["RaftNode"] = field(default_factory=list)
+
+    # Persistent state (survive restarts)
+    current_term: int = 0
+    voted_for: Optional[int] = None  # candidate ID voted for this term
+    log: list[LogEntry] = field(default_factory=list)
+
+    # Volatile state
+    state: State = State.FOLLOWER
+    commit_index: int = -1  # highest log entry known to be committed
+    last_applied: int = -1  # highest log entry applied to state machine
+
+    # Leader-only state (reinitialized after election)
+    next_index: dict[int, int] = field(default_factory=dict)
+    match_index: dict[int, int] = field(default_factory=dict)
+
+    # Simulated state machine
+    kv_store: dict[str, str] = field(default_factory=dict)
+
+    def become_candidate(self):
+        """Timeout expired — start an election."""
+        self.state = State.CANDIDATE
+        self.current_term += 1
+        self.voted_for = self.id  # vote for self
+        print(f"[N{self.id}] → candidate (term {self.current_term})")
+
+    def request_vote(self, candidate_id: int, candidate_term: int,
+                     last_log_index: int, last_log_term: int) -> bool:
+        """
+        Decide whether to grant a vote.
+        Two conditions must both hold:
+          1. candidate's term >= our term
+          2. candidate's log is at least as up-to-date as ours
+        """
+        if candidate_term < self.current_term:
+            return False  # stale candidate
+
+        # Update term if we see a higher one
+        if candidate_term > self.current_term:
+            self.current_term = candidate_term
+            self.voted_for = None
+            self.state = State.FOLLOWER
+
+        already_voted = self.voted_for not in (None, candidate_id)
+        if already_voted:
+            return False
+
+        # Log up-to-date check
+        my_last_term  = self.log[-1].term if self.log else 0
+        my_last_index = len(self.log) - 1
+        log_ok = (candidate_term > my_last_term or
+                  (candidate_term == my_last_term and last_log_index >= my_last_index))
+
+        if log_ok:
+            self.voted_for = candidate_id
+            return True
+        return False
+
+    def append_entries(self, leader_term: int, leader_id: int,
+                       prev_log_index: int, prev_log_term: int,
+                       entries: list[LogEntry], leader_commit: int) -> bool:
+        """
+        Core RPC for both heartbeats (entries=[]) and log replication.
+        Returns True if successful.
+        """
+        if leader_term < self.current_term:
+            return False
+
+        # Valid leader — reset to follower
+        self.current_term = leader_term
+        self.state = State.FOLLOWER
+        self.voted_for = None
+
+        # Consistency check: does our log match at prev_log_index?
+        if prev_log_index >= 0:
+            if len(self.log) <= prev_log_index:
+                return False  # we're missing entries
+            if self.log[prev_log_index].term != prev_log_term:
+                # Conflict — delete from this point forward
+                self.log = self.log[:prev_log_index]
+                return False
+
+        # Append new entries (skip duplicates)
+        for i, entry in enumerate(entries):
+            idx = prev_log_index + 1 + i
+            if idx < len(self.log):
+                if self.log[idx].term != entry.term:
+                    self.log = self.log[:idx]  # delete conflicting suffix
+                    self.log.append(entry)
+            else:
+                self.log.append(entry)
+
+        # Update commit index and apply to state machine
+        if leader_commit > self.commit_index:
+            self.commit_index = min(leader_commit, len(self.log) - 1)
+            self._apply_committed()
+
+        return True
+
+    def _apply_committed(self):
+        """Apply log entries up to commit_index to the state machine."""
+        while self.last_applied < self.commit_index:
+            self.last_applied += 1
+            cmd = self.log[self.last_applied].command
+            self._execute(cmd)
+
+    def _execute(self, command: str):
+        """Toy state machine: parses SET/GET/DEL commands."""
+        parts = command.split()
+        if parts[0] == "SET" and "=" in parts[1]:
+            k, v = parts[1].split("=", 1)
+            self.kv_store[k] = v
+        elif parts[0] == "DEL":
+            self.kv_store.pop(parts[1], None)
+
+
+# --- Simulation ---
+if __name__ == "__main__":
+    # Create a 5-node cluster
+    nodes = [RaftNode(id=i) for i in range(5)]
+    for n in nodes:
+        n.peers = [p for p in nodes if p.id != n.id]
+
+    # Simulate: N0 becomes candidate and wins election
+    nodes[0].become_candidate()
+
+    votes = 1  # self-vote
+    for peer in nodes[0].peers:
+        granted = peer.request_vote(
+            candidate_id=nodes[0].id,
+            candidate_term=nodes[0].current_term,
+            last_log_index=len(nodes[0].log) - 1,
+            last_log_term=nodes[0].log[-1].term if nodes[0].log else 0,
+        )
+        if granted:
+            votes += 1
+
+    if votes > len(nodes) / 2:
+        nodes[0].state = State.LEADER
+        print(f"[N0] → leader (term {nodes[0].current_term}, votes: {votes}/{len(nodes)})")
+
+    # Leader replicates a command
+    entry = LogEntry(term=nodes[0].current_term, command="SET x=42")
+    nodes[0].log.append(entry)
+
+    acks = 1
+    for peer in nodes[0].peers:
+        ok = peer.append_entries(
+            leader_term=nodes[0].current_term,
+            leader_id=nodes[0].id,
+            prev_log_index=-1,
+            prev_log_term=0,
+            entries=[entry],
+            leader_commit=nodes[0].commit_index,
+        )
+        if ok:
+            acks += 1
+
+    if acks > len(nodes) / 2:
+        nodes[0].commit_index = 0
+        nodes[0]._apply_committed()
+        print(f"[N0] committed entry 0: '{entry.command}'")
+        print(f"[N0] state machine: {nodes[0].kv_store}")
+`;
+
+const tsCode = `// raft.ts — Minimal Raft node (TypeScript)
+// Same concepts as the Python version, typed for clarity.
+
+enum State { Follower = "follower", Candidate = "candidate", Leader = "leader" }
+
+interface LogEntry {
+  term: number;    // which term this entry belongs to
+  command: string; // the command to apply (e.g. "SET x=1")
+}
+
+interface AppendEntriesArgs {
+  leaderTerm: number;
+  leaderId: number;
+  prevLogIndex: number; // index of log entry before new ones
+  prevLogTerm: number;  // term of prevLogIndex entry
+  entries: LogEntry[];
+  leaderCommit: number; // leader's commitIndex
+}
+
+interface RequestVoteArgs {
+  candidateTerm: number;
+  candidateId: number;
+  lastLogIndex: number;
+  lastLogTerm: number;
+}
+
+class RaftNode {
+  id: number;
+  peers: RaftNode[] = [];
+
+  // Persistent state
+  currentTerm = 0;
+  votedFor: number | null = null;
+  log: LogEntry[] = [];
+
+  // Volatile state
+  state: State = State.Follower;
+  commitIndex = -1;
+  lastApplied = -1;
+
+  // State machine
+  kvStore: Map<string, string> = new Map();
+
+  constructor(id: number) {
+    this.id = id;
+  }
+
+  becomeCandidate(): void {
+    this.state = State.Candidate;
+    this.currentTerm++;
+    this.votedFor = this.id; // vote for self
+    console.log(\`[N\${this.id}] → candidate (term \${this.currentTerm})\`);
+  }
+
+  requestVote(args: RequestVoteArgs): boolean {
+    const { candidateTerm, candidateId, lastLogIndex, lastLogTerm } = args;
+
+    if (candidateTerm < this.currentTerm) return false;
+
+    if (candidateTerm > this.currentTerm) {
+      this.currentTerm = candidateTerm;
+      this.votedFor = null;
+      this.state = State.Follower;
+    }
+
+    if (this.votedFor !== null && this.votedFor !== candidateId) return false;
+
+    // Log up-to-date check (§5.4.1 of the paper)
+    const myLastTerm  = this.log.length > 0 ? this.log.at(-1)!.term : 0;
+    const myLastIndex = this.log.length - 1;
+    const logOk = lastLogTerm > myLastTerm ||
+                  (lastLogTerm === myLastTerm && lastLogIndex >= myLastIndex);
+
+    if (logOk) {
+      this.votedFor = candidateId;
+      return true;
+    }
+    return false;
+  }
+
+  appendEntries(args: AppendEntriesArgs): boolean {
+    const { leaderTerm, prevLogIndex, prevLogTerm, entries, leaderCommit } = args;
+
+    if (leaderTerm < this.currentTerm) return false;
+
+    this.currentTerm = leaderTerm;
+    this.state = State.Follower;
+    this.votedFor = null;
+
+    // Consistency check
+    if (prevLogIndex >= 0) {
+      if (this.log.length <= prevLogIndex) return false;
+      if (this.log[prevLogIndex].term !== prevLogTerm) {
+        this.log = this.log.slice(0, prevLogIndex); // truncate conflicting entries
+        return false;
+      }
+    }
+
+    // Append entries
+    entries.forEach((entry, i) => {
+      const idx = prevLogIndex + 1 + i;
+      if (idx < this.log.length) {
+        if (this.log[idx].term !== entry.term) {
+          this.log = this.log.slice(0, idx);
+          this.log.push(entry);
+        }
+        // else: duplicate, already have it
+      } else {
+        this.log.push(entry);
+      }
+    });
+
+    // Advance commit and apply
+    if (leaderCommit > this.commitIndex) {
+      this.commitIndex = Math.min(leaderCommit, this.log.length - 1);
+      this.applyCommitted();
+    }
+
+    return true;
+  }
+
+  private applyCommitted(): void {
+    while (this.lastApplied < this.commitIndex) {
+      this.lastApplied++;
+      this.execute(this.log[this.lastApplied].command);
+    }
+  }
+
+  private execute(command: string): void {
+    const parts = command.split(" ");
+    if (parts[0] === "SET" && parts[1]?.includes("=")) {
+      const [k, v] = parts[1].split("=");
+      this.kvStore.set(k, v);
+    } else if (parts[0] === "DEL") {
+      this.kvStore.delete(parts[1]);
+    }
+  }
+}
+
+// --- Simulation ---
+const nodes = Array.from({ length: 5 }, (_, i) => new RaftNode(i));
+nodes.forEach(n => { n.peers = nodes.filter(p => p.id !== n.id); });
+
+// N0 runs an election
+nodes[0].becomeCandidate();
+
+let votes = 1; // self-vote
+for (const peer of nodes[0].peers) {
+  const granted = peer.requestVote({
+    candidateTerm: nodes[0].currentTerm,
+    candidateId: nodes[0].id,
+    lastLogIndex: nodes[0].log.length - 1,
+    lastLogTerm: nodes[0].log.at(-1)?.term ?? 0,
+  });
+  if (granted) votes++;
+}
+
+if (votes > nodes.length / 2) {
+  nodes[0].state = State.Leader;
+  console.log(\`[N0] → leader (term \${nodes[0].currentTerm}, votes: \${votes}/\${nodes.length})\`);
+}
+
+// Replicate a command
+const entry: LogEntry = { term: nodes[0].currentTerm, command: "SET x=42" };
+nodes[0].log.push(entry);
+
+let acks = 1;
+for (const peer of nodes[0].peers) {
+  const ok = peer.appendEntries({
+    leaderTerm: nodes[0].currentTerm,
+    leaderId: nodes[0].id,
+    prevLogIndex: -1,
+    prevLogTerm: 0,
+    entries: [entry],
+    leaderCommit: nodes[0].commitIndex,
+  });
+  if (ok) acks++;
+}
+
+if (acks > nodes.length / 2) {
+  nodes[0].commitIndex = 0;
+  (nodes[0] as any).applyCommitted();
+  console.log(\`[N0] committed: "\${entry.command}"\`);
+  console.log(\`[N0] kv store:\`, Object.fromEntries(nodes[0].kvStore));
+}
+`;
+---
+<Base title="Code" description="Minimal Raft implementations in Python, TypeScript, Go, and Rust — annotated for learning.">
+
+  <section class="max-w-4xl mx-auto px-4 pt-16 pb-8">
+    <p class="text-sky-400 text-sm font-mono mb-3">Chapter 4</p>
+    <h1 class="text-4xl font-bold text-white mb-4">Code</h1>
+    <p class="text-slate-400 text-lg mb-4">
+      Minimal, readable implementations of the core Raft data structures and state transitions.
+      Not production-ready — designed to make the algorithm tangible.
+    </p>
+    <div class="bg-amber-900/20 border border-amber-700/40 rounded-lg px-4 py-3 text-sm text-amber-300">
+      ⚠️ These omit networking, persistence, and many edge cases. For production, use
+      <a href="https://github.com/hashicorp/raft" target="_blank" class="underline">hashicorp/raft</a>,
+      <a href="https://github.com/etcd-io/raft" target="_blank" class="underline">etcd/raft</a>, or
+      <a href="https://github.com/datafuselabs/openraft" target="_blank" class="underline">openraft</a>.
+    </div>
+  </section>
+
+  <!-- Language tabs -->
+  <section class="max-w-4xl mx-auto px-4 py-6">
+    <div class="flex gap-2 mb-6" id="lang-tabs">
+      <button data-lang="python" class="lang-tab active px-4 py-2 text-sm font-mono rounded-lg bg-sky-800 text-sky-200 border border-sky-600 transition">Python</button>
+      <button data-lang="typescript" class="lang-tab px-4 py-2 text-sm font-mono rounded-lg bg-slate-800 text-slate-400 border border-slate-700 transition">TypeScript</button>
+      <button data-lang="go" class="lang-tab px-4 py-2 text-sm font-mono rounded-lg bg-slate-800 text-slate-400 border border-slate-700 transition">Go</button>
+      <button data-lang="rust" class="lang-tab px-4 py-2 text-sm font-mono rounded-lg bg-slate-800 text-slate-400 border border-slate-700 transition">Rust</button>
+    </div>
+
+    <!-- Python -->
+    <div id="code-python" class="lang-panel">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-sm text-slate-400">~180 lines · covers election + log replication + state machine</span>
+        <button class="copy-btn px-3 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition" data-target="py-code">Copy</button>
+      </div>
+      <pre id="py-code" class="bg-slate-950 rounded-xl border border-slate-700 p-5 text-xs font-mono text-slate-300 overflow-x-auto overflow-y-auto max-h-[600px] leading-relaxed whitespace-pre">{pythonCode}</pre>
+    </div>
+
+    <!-- TypeScript -->
+    <div id="code-typescript" class="lang-panel hidden">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-sm text-slate-400">~140 lines · same logic, typed interfaces make the protocol explicit</span>
+        <button class="copy-btn px-3 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition" data-target="ts-code">Copy</button>
+      </div>
+      <pre id="ts-code" class="bg-slate-950 rounded-xl border border-slate-700 p-5 text-xs font-mono text-slate-300 overflow-x-auto overflow-y-auto max-h-[600px] leading-relaxed whitespace-pre">{tsCode}</pre>
+    </div>
+
+    <!-- Go -->
+    <div id="code-go" class="lang-panel hidden">
+      <div class="bg-slate-900 rounded-xl border border-slate-700 p-8 text-center">
+        <p class="text-slate-400 mb-2">Go implementation coming soon</p>
+        <p class="text-slate-500 text-sm">Will demonstrate idiomatic Go: goroutines for timers, channels for RPCs, and struct embedding for the Raft state.</p>
+      </div>
+    </div>
+
+    <!-- Rust -->
+    <div id="code-rust" class="lang-panel hidden">
+      <div class="bg-slate-900 rounded-xl border border-slate-700 p-8 text-center">
+        <p class="text-slate-400 mb-2">Rust implementation coming soon</p>
+        <p class="text-slate-500 text-sm">Will demonstrate ownership model for log entries, async/await for RPCs, and how TiKV's openraft library approaches the design.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Key data structures callout -->
+  <section class="max-w-4xl mx-auto px-4 py-8">
+    <h2 class="text-xl font-bold text-white mb-4">The 5 things every Raft node must store</h2>
+    <div class="bg-slate-900 rounded-xl border border-slate-700 p-5 font-mono text-sm">
+      <div class="space-y-2">
+        <div><span class="text-yellow-400">currentTerm</span> <span class="text-slate-500">— latest term seen (increment on election)</span></div>
+        <div><span class="text-yellow-400">votedFor</span>    <span class="text-slate-500">— candidateId voted for in currentTerm (or null)</span></div>
+        <div><span class="text-yellow-400">log[]</span>       <span class="text-slate-500">— the replicated log: [(term, command), ...]</span></div>
+        <div><span class="text-sky-400">commitIndex</span> <span class="text-slate-500">— highest index known to be committed</span></div>
+        <div><span class="text-sky-400">lastApplied</span> <span class="text-slate-500">— highest index applied to state machine</span></div>
+      </div>
+      <p class="text-slate-500 text-xs mt-3">Yellow = must survive crashes (write to disk). Blue = can be reconstructed.</p>
+    </div>
+  </section>
+
+  <section class="max-w-4xl mx-auto px-4 py-6">
+    <div class="flex justify-between items-center">
+      <a href={`${base}/in-the-wild`} class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition text-sm">← In the Wild</a>
+      <a href={`${base}/resources`} class="px-6 py-3 bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg transition">Next: Resources →</a>
+    </div>
+  </section>
+</Base>
+
+<script>
+  // Language tab switcher
+  document.querySelectorAll('.lang-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const lang = (btn as HTMLElement).dataset.lang!;
+
+      document.querySelectorAll('.lang-tab').forEach(b => {
+        b.classList.remove('active', 'bg-sky-800', 'text-sky-200', 'border-sky-600');
+        b.classList.add('bg-slate-800', 'text-slate-400', 'border-slate-700');
+      });
+      btn.classList.add('active', 'bg-sky-800', 'text-sky-200', 'border-sky-600');
+      btn.classList.remove('bg-slate-800', 'text-slate-400', 'border-slate-700');
+
+      document.querySelectorAll('.lang-panel').forEach(p => p.classList.add('hidden'));
+      document.getElementById(`code-${lang}`)?.classList.remove('hidden');
+    });
+  });
+
+  // Copy buttons
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const targetId = (btn as HTMLElement).dataset.target!;
+      const code = document.getElementById(targetId)?.textContent ?? '';
+      await navigator.clipboard.writeText(code);
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+    });
+  });
+</script>

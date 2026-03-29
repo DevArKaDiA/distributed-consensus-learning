@@ -1,0 +1,143 @@
+---
+import Base from '../layouts/Base.astro';
+const base = import.meta.env.BASE_URL;
+---
+<Base title="The Problem" description="Why distributed consensus is hard: failures, partitions, and the impossibility results behind it.">
+
+  <section class="max-w-4xl mx-auto px-4 pt-16 pb-8">
+    <p class="text-sky-400 text-sm font-mono mb-3">Chapter 1</p>
+    <h1 class="text-4xl font-bold text-white mb-4">The Problem</h1>
+    <p class="text-slate-400 text-lg">
+      Before understanding Raft, you need to feel the pain it solves.
+    </p>
+  </section>
+
+  <!-- The setup -->
+  <section class="max-w-4xl mx-auto px-4 py-8">
+    <h2 class="text-2xl font-bold text-white mb-4">A simple distributed key-value store</h2>
+    <p class="text-slate-400 mb-4 leading-relaxed">
+      Imagine you're building a distributed key-value store. You run 3 servers so that if one
+      crashes, the system keeps working. Every write goes to all 3 servers, every read can hit any of them.
+    </p>
+    <div class="bg-slate-900 rounded-xl border border-slate-700 p-6 font-mono text-sm mb-6">
+      <div class="text-slate-500 mb-3"># client writes</div>
+      <div class="text-green-400">SET x = 1   →   [S1, S2, S3]</div>
+      <div class="text-green-400">SET x = 2   →   [S1, S2, S3]</div>
+      <div class="text-slate-400 mt-3 mb-1"># client reads from any server</div>
+      <div class="text-sky-400">GET x from S2  →  2 ✓</div>
+    </div>
+    <p class="text-slate-400 mb-4 leading-relaxed">
+      This looks fine — until things go wrong.
+    </p>
+  </section>
+
+  <!-- Failure scenarios -->
+  <section class="max-w-4xl mx-auto px-4 py-8">
+    <h2 class="text-2xl font-bold text-white mb-6">What can go wrong</h2>
+
+    <div class="space-y-4">
+      <div class="bg-slate-900 rounded-xl border border-red-900/40 p-6">
+        <h3 class="font-semibold text-red-400 mb-2">1. Node crash</h3>
+        <p class="text-slate-400 text-sm leading-relaxed">
+          S2 crashes mid-write. S1 and S3 wrote <code class="text-sky-300">x=2</code>, but S2 still has <code class="text-sky-300">x=1</code>.
+          When S2 comes back, it serves stale data. A client reading from S2 gets the wrong answer.
+        </p>
+      </div>
+
+      <div class="bg-slate-900 rounded-xl border border-orange-900/40 p-6">
+        <h3 class="font-semibold text-orange-400 mb-2">2. Network partition</h3>
+        <p class="text-slate-400 text-sm leading-relaxed">
+          A network switch fails and splits your cluster: {"{S1}"} on one side, {"{S2, S3}"} on the other.
+          Both sides are alive and healthy. Both sides can receive writes. Now you have two "leaders"
+          writing independently — this is called <strong class="text-slate-200">split-brain</strong>.
+        </p>
+      </div>
+
+      <div class="bg-slate-900 rounded-xl border border-yellow-900/40 p-6">
+        <h3 class="font-semibold text-yellow-400 mb-2">3. Slow messages</h3>
+        <p class="text-slate-400 text-sm leading-relaxed">
+          A message takes 10 seconds to arrive (the network is congested, not broken).
+          Is S2 dead, or just slow? You can't tell from the outside. If you assume dead and elect a
+          new leader, you might end up with two active leaders simultaneously.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- The core challenge -->
+  <section class="max-w-4xl mx-auto px-4 py-8">
+    <h2 class="text-2xl font-bold text-white mb-4">The core challenge: agreement under uncertainty</h2>
+    <p class="text-slate-400 mb-6 leading-relaxed">
+      The fundamental problem is this: <strong class="text-slate-200">you need multiple nodes to agree on a sequence of values,
+      even when nodes fail and messages are delayed or lost.</strong>
+      This is called <em>consensus</em>.
+    </p>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+      <div class="bg-slate-900 rounded-xl border border-slate-700 p-5">
+        <h4 class="font-semibold text-white mb-3">Safety (correctness)</h4>
+        <p class="text-slate-400 text-sm">Two nodes must never decide on <em>different</em> values for the same slot. No divergence, ever.</p>
+      </div>
+      <div class="bg-slate-900 rounded-xl border border-slate-700 p-5">
+        <h4 class="font-semibold text-white mb-3">Liveness (progress)</h4>
+        <p class="text-slate-400 text-sm">If enough nodes are alive and can communicate, the system must eventually make progress and not stall forever.</p>
+      </div>
+    </div>
+
+    <div class="bg-amber-900/20 border border-amber-700/40 rounded-xl p-5">
+      <h4 class="font-semibold text-amber-400 mb-2">FLP Impossibility (1985)</h4>
+      <p class="text-slate-400 text-sm leading-relaxed">
+        Fischer, Lynch, and Paterson proved that in a fully asynchronous system (where you cannot distinguish
+        a crashed node from a slow one), it is <strong class="text-slate-200">impossible</strong> to guarantee
+        both safety and liveness simultaneously.
+        <br/><br/>
+        In practice, systems break this by using <strong class="text-slate-200">timeouts</strong> — they
+        <em>assume</em> a node is dead if it doesn't respond in time. This makes the network
+        "partially synchronous" and gets around the impossibility.
+        Raft is built on this assumption.
+      </p>
+    </div>
+  </section>
+
+  <!-- CAP theorem -->
+  <section class="max-w-4xl mx-auto px-4 py-8">
+    <h2 class="text-2xl font-bold text-white mb-4">CAP Theorem</h2>
+    <p class="text-slate-400 mb-6 leading-relaxed">
+      During a network partition, you must choose between:
+    </p>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div class="bg-slate-900 rounded-xl border border-slate-700 p-5 text-center">
+        <div class="text-3xl mb-2">✅</div>
+        <h4 class="font-semibold text-white mb-1">Consistency</h4>
+        <p class="text-slate-400 text-xs">Every read gets the most recent write or an error.</p>
+      </div>
+      <div class="bg-slate-900 rounded-xl border border-slate-700 p-5 text-center">
+        <div class="text-3xl mb-2">📡</div>
+        <h4 class="font-semibold text-white mb-1">Availability</h4>
+        <p class="text-slate-400 text-xs">Every request gets a (non-error) response, even if it might be stale.</p>
+      </div>
+      <div class="bg-slate-900 rounded-xl border border-slate-700 p-5 text-center">
+        <div class="text-3xl mb-2">🔀</div>
+        <h4 class="font-semibold text-white mb-1">Partition Tolerance</h4>
+        <p class="text-slate-400 text-xs">The system continues to operate even if messages are lost or delayed.</p>
+      </div>
+    </div>
+    <div class="bg-slate-900 rounded-xl border border-sky-800/50 p-5">
+      <p class="text-slate-400 text-sm leading-relaxed">
+        <strong class="text-sky-400">Raft chooses CP</strong> — it sacrifices availability to guarantee consistency.
+        If the cluster loses quorum (more than half the nodes are unreachable), it stops accepting writes
+        rather than risk serving inconsistent data. This is the right trade-off for databases, config stores, and coordination services.
+      </p>
+    </div>
+  </section>
+
+  <!-- Next -->
+  <section class="max-w-4xl mx-auto px-4 py-12">
+    <div class="flex justify-between items-center">
+      <span class="text-slate-600">←</span>
+      <a href={`${base}/raft`} class="px-6 py-3 bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg transition">
+        Next: How Raft solves this →
+      </a>
+    </div>
+  </section>
+</Base>

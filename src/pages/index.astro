@@ -1,0 +1,199 @@
+---
+import Base from '../layouts/Base.astro';
+const base = import.meta.env.BASE_URL;
+---
+<Base title="Home">
+  <!-- Hero -->
+  <section class="max-w-6xl mx-auto px-4 pt-24 pb-16 text-center">
+    <span class="inline-block px-3 py-1 rounded-full bg-sky-900/40 text-sky-400 text-xs font-mono mb-6 border border-sky-800">
+      Distributed Systems · Consensus · Raft
+    </span>
+    <h1 class="text-5xl font-bold text-white mb-6 leading-tight">
+      How do distributed systems<br />
+      <span class="text-sky-400">agree on anything?</span>
+    </h1>
+    <p class="text-xl text-slate-400 max-w-2xl mx-auto mb-10">
+      When multiple servers need to share state, any one of them can fail at any time.
+      Consensus algorithms solve this. Raft is the one you can actually understand.
+    </p>
+    <div class="flex gap-4 justify-center">
+      <a href={`${base}/problem`} class="px-6 py-3 bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg transition">
+        Start from the problem →
+      </a>
+      <a href={`${base}/raft`} class="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-lg transition">
+        Jump to Raft
+      </a>
+    </div>
+  </section>
+
+  <!-- Mini cluster animation -->
+  <section class="max-w-2xl mx-auto px-4 py-8">
+    <div id="cluster-demo" class="bg-slate-900 rounded-2xl border border-slate-700 p-8 flex flex-col items-center gap-6">
+      <p class="text-slate-500 text-sm font-mono">live demo — 5-node cluster</p>
+      <div id="nodes-container" class="flex gap-8 items-center justify-center"></div>
+      <div id="demo-status" class="text-sm text-slate-400 font-mono h-6"></div>
+      <div class="flex gap-3">
+        <button id="btn-start" class="px-4 py-2 text-sm bg-green-800/60 hover:bg-green-700/60 text-green-300 rounded-lg border border-green-700/40 transition">
+          Start Election
+        </button>
+        <button id="btn-kill" class="px-4 py-2 text-sm bg-red-800/60 hover:bg-red-700/60 text-red-300 rounded-lg border border-red-700/40 transition">
+          Kill Leader
+        </button>
+        <button id="btn-reset" class="px-4 py-2 text-sm bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg border border-slate-600 transition">
+          Reset
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- What you'll learn -->
+  <section class="max-w-6xl mx-auto px-4 py-16">
+    <h2 class="text-2xl font-bold text-white mb-10 text-center">What you'll learn</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <a href={`${base}/problem`} class="group bg-slate-900 hover:bg-slate-800 rounded-xl border border-slate-700 hover:border-slate-600 p-6 transition">
+        <div class="text-2xl mb-3">⚡</div>
+        <h3 class="font-semibold text-white mb-2 group-hover:text-sky-400 transition">The Problem</h3>
+        <p class="text-slate-400 text-sm leading-relaxed">Why distributed consensus is hard: network partitions, node failures, and split-brain scenarios.</p>
+      </a>
+      <a href={`${base}/raft`} class="group bg-slate-900 hover:bg-slate-800 rounded-xl border border-slate-700 hover:border-slate-600 p-6 transition">
+        <div class="text-2xl mb-3">🗳️</div>
+        <h3 class="font-semibold text-white mb-2 group-hover:text-sky-400 transition">How Raft Works</h3>
+        <p class="text-slate-400 text-sm leading-relaxed">Leader election, log replication, and safety — with interactive animations for each phase.</p>
+      </a>
+      <a href={`${base}/in-the-wild`} class="group bg-slate-900 hover:bg-slate-800 rounded-xl border border-slate-700 hover:border-slate-600 p-6 transition">
+        <div class="text-2xl mb-3">🌍</div>
+        <h3 class="font-semibold text-white mb-2 group-hover:text-sky-400 transition">Real-world Usage</h3>
+        <p class="text-slate-400 text-sm leading-relaxed">etcd, CockroachDB, TiKV, Consul, Kafka KRaft — why they chose Raft and what it buys them.</p>
+      </a>
+      <a href={`${base}/code`} class="group bg-slate-900 hover:bg-slate-800 rounded-xl border border-slate-700 hover:border-slate-600 p-6 transition">
+        <div class="text-2xl mb-3">💻</div>
+        <h3 class="font-semibold text-white mb-2 group-hover:text-sky-400 transition">Code</h3>
+        <p class="text-slate-400 text-sm leading-relaxed">Minimal Raft implementations in Python, TypeScript, Go, and Rust — readable and annotated.</p>
+      </a>
+      <a href={`${base}/raft#safety`} class="group bg-slate-900 hover:bg-slate-800 rounded-xl border border-slate-700 hover:border-slate-600 p-6 transition">
+        <div class="text-2xl mb-3">📐</div>
+        <h3 class="font-semibold text-white mb-2 group-hover:text-sky-400 transition">Guarantees</h3>
+        <p class="text-slate-400 text-sm leading-relaxed">What Raft actually guarantees (and what it does not). CAP theorem, linearizability, liveness.</p>
+      </a>
+      <a href={`${base}/resources`} class="group bg-slate-900 hover:bg-slate-800 rounded-xl border border-slate-700 hover:border-slate-600 p-6 transition">
+        <div class="text-2xl mb-3">📚</div>
+        <h3 class="font-semibold text-white mb-2 group-hover:text-sky-400 transition">Resources</h3>
+        <p class="text-slate-400 text-sm leading-relaxed">The original paper, TLA+ specs, visualization tools, and further reading.</p>
+      </a>
+    </div>
+  </section>
+
+  <!-- Quick context: Paxos vs Raft -->
+  <section class="max-w-3xl mx-auto px-4 py-8 mb-8">
+    <div class="bg-slate-900 rounded-xl border border-slate-700 p-6">
+      <h3 class="font-semibold text-white mb-3">Why Raft, not Paxos?</h3>
+      <p class="text-slate-400 text-sm leading-relaxed">
+        Paxos was the dominant consensus algorithm for decades but is notoriously hard to understand and implement correctly.
+        Raft was designed explicitly for <strong class="text-slate-200">understandability</strong> — its authors ran studies showing
+        students learn it significantly faster. That's why so much modern infrastructure chooses Raft.
+      </p>
+    </div>
+  </section>
+</Base>
+
+<script>
+  const COLORS: Record<string, string> = {
+    follower: '#6366f1',
+    candidate: '#10b981',
+    leader: '#f59e0b',
+    dead: '#374151',
+  };
+
+  interface NodeData {
+    id: number;
+    state: 'follower' | 'candidate' | 'leader' | 'dead';
+    term: number;
+  }
+
+  let nodes: NodeData[] = [];
+  let animating = false;
+
+  function render() {
+    const container = document.getElementById('nodes-container');
+    if (!container) return;
+    container.innerHTML = '';
+    nodes.forEach(n => {
+      const color = COLORS[n.state];
+      const wrap = document.createElement('div');
+      wrap.className = 'flex flex-col items-center gap-2';
+      wrap.innerHTML = `
+        <div style="width:56px;height:56px;border-radius:50%;border:2px solid ${color};background:${color}22;
+                    display:flex;align-items:center;justify-content:center;
+                    font-family:monospace;font-size:12px;font-weight:bold;color:${color};
+                    transition:all 0.3s ease;">
+          N${n.id}
+        </div>
+        <span style="font-size:11px;color:#94a3b8;font-family:monospace;">${n.state}</span>
+      `;
+      container.appendChild(wrap);
+    });
+  }
+
+  function setStatus(msg: string) {
+    const el = document.getElementById('demo-status');
+    if (el) el.textContent = msg;
+  }
+
+  function init() {
+    nodes = Array.from({ length: 5 }, (_, i) => ({
+      id: i + 1,
+      state: 'follower' as const,
+      term: 0,
+    }));
+    animating = false;
+    render();
+    setStatus('All nodes are followers. Press Start Election.');
+  }
+
+  const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+  async function runElection() {
+    if (animating) return;
+    animating = true;
+
+    const alive = nodes.filter(n => n.state !== 'dead');
+    if (alive.length === 0) { animating = false; return; }
+
+    const candidate = alive[Math.floor(Math.random() * alive.length)];
+    nodes.forEach(n => { if (n.state === 'leader') n.state = 'follower'; });
+    candidate.state = 'candidate';
+    candidate.term += 1;
+    render();
+    setStatus(`Node ${candidate.id} timed out → became candidate (term ${candidate.term})`);
+    await sleep(900);
+
+    let votes = 1;
+    for (const n of alive) {
+      if (n.id === candidate.id) continue;
+      await sleep(350);
+      votes++;
+      setStatus(`Node ${n.id} → voted for N${candidate.id}  [${votes}/${alive.length} votes]`);
+    }
+    await sleep(500);
+
+    candidate.state = 'leader';
+    alive.filter(n => n.id !== candidate.id).forEach(n => n.state = 'follower');
+    render();
+    setStatus(`✓ Node ${candidate.id} is leader (term ${candidate.term}) — heartbeats sent to followers`);
+    animating = false;
+  }
+
+  function killLeader() {
+    const leader = nodes.find(n => n.state === 'leader');
+    if (!leader) { setStatus('No leader yet. Run an election first.'); return; }
+    leader.state = 'dead';
+    render();
+    setStatus(`Node ${leader.id} crashed 💀 — followers will timeout and start a new election`);
+  }
+
+  document.getElementById('btn-start')?.addEventListener('click', runElection);
+  document.getElementById('btn-kill')?.addEventListener('click', killLeader);
+  document.getElementById('btn-reset')?.addEventListener('click', init);
+
+  init();
+</script>

@@ -1,0 +1,159 @@
+---
+import Base from '../layouts/Base.astro';
+const base = import.meta.env.BASE_URL;
+
+const systems = [
+  {
+    name: 'etcd',
+    logo: '⚙️',
+    url: 'https://etcd.io',
+    tagline: 'Distributed key-value store powering Kubernetes',
+    uses: 'Stores all Kubernetes cluster state: pod specs, service configs, secrets, RBAC rules.',
+    why: 'etcd chose Raft because Kubernetes needs strong consistency — if two nodes disagree about which pods should run, you get duplicate deployments or missing services. Raft gives CP guarantees with a simple operational model.',
+    scale: '3 or 5 nodes typical; handles hundreds of thousands of keys',
+    lang: 'Go',
+    highlight: 'kubernetes',
+  },
+  {
+    name: 'CockroachDB',
+    logo: '🪳',
+    url: 'https://www.cockroachlabs.com',
+    tagline: 'Distributed SQL database with ACID transactions',
+    uses: 'Each range (64MB shard of data) is a Raft group. A CockroachDB cluster can have thousands of Raft groups running simultaneously.',
+    why: 'Multi-Raft (one Raft group per shard) allows horizontal scaling while preserving ACID semantics across shards via distributed transactions. Each shard independently tolerates failures.',
+    scale: 'Thousands of Raft groups per cluster',
+    lang: 'Go',
+    highlight: 'sql',
+  },
+  {
+    name: 'TiKV',
+    logo: '🔷',
+    url: 'https://tikv.org',
+    tagline: 'Distributed transactional key-value store (CNCF)',
+    uses: "Backing store for TiDB (distributed MySQL-compatible DB). Like CockroachDB, uses Multi-Raft — each region is a Raft group.",
+    why: 'TiKV adds Multi-Raft with a placement driver that balances Raft leadership across nodes. Designed for massive scale (petabytes) with predictable latency.',
+    scale: 'Production clusters with PB-scale data',
+    lang: 'Rust',
+    highlight: 'storage',
+  },
+  {
+    name: 'Consul',
+    logo: '🌐',
+    url: 'https://www.consul.io',
+    tagline: 'Service mesh & service discovery by HashiCorp',
+    uses: 'Stores service catalog, health checks, KV store for config, and ACL tokens. Used for service-to-service discovery in microservices.',
+    why: "HashiCorp built their own Raft library (hashicorp/raft) used in Consul, Vault, and Nomad. Raft ensures that even if a Consul server crashes, the service registry remains consistent — critical for production traffic routing.",
+    scale: '3 or 5 server nodes; thousands of agent nodes',
+    lang: 'Go',
+    highlight: 'service-mesh',
+  },
+  {
+    name: 'Kafka (KRaft)',
+    logo: '📨',
+    url: 'https://kafka.apache.org',
+    tagline: 'Distributed event streaming platform',
+    uses: 'KRaft mode (Kafka Raft) replaces ZooKeeper for storing cluster metadata: topic configs, partition assignments, controller election.',
+    why: 'The old ZooKeeper dependency was a scaling bottleneck and operational burden. KRaft allows Kafka to manage its own metadata with a built-in Raft implementation, supporting millions of partitions.',
+    scale: 'Replacing ZooKeeper in all new Kafka deployments (default since Kafka 3.3)',
+    lang: 'Java/Scala',
+    highlight: 'streaming',
+  },
+  {
+    name: 'InfluxDB',
+    logo: '📈',
+    url: 'https://www.influxdata.com',
+    tagline: 'Time series database',
+    uses: 'InfluxDB Enterprise uses Raft for meta-node coordination — managing data node membership, database/retention policy configs.',
+    why: 'Time series workloads are write-heavy. Raft handles coordination at the meta layer without becoming the write bottleneck for the actual data path.',
+    scale: 'Small meta-cluster (3 nodes) coordinating large data clusters',
+    lang: 'Go',
+    highlight: 'timeseries',
+  },
+];
+---
+<Base title="Raft in the Wild" description="Real systems that use Raft: etcd, CockroachDB, TiKV, Consul, Kafka KRaft, and more.">
+
+  <section class="max-w-4xl mx-auto px-4 pt-16 pb-8">
+    <p class="text-sky-400 text-sm font-mono mb-3">Chapter 3</p>
+    <h1 class="text-4xl font-bold text-white mb-4">Raft in the Wild</h1>
+    <p class="text-slate-400 text-lg mb-6">
+      These are real production systems you've probably used. All of them chose Raft
+      — here's exactly what they use it for and why.
+    </p>
+  </section>
+
+  <section class="max-w-4xl mx-auto px-4 py-4 space-y-6">
+    {systems.map(s => (
+      <div class="bg-slate-900 rounded-2xl border border-slate-700 p-7">
+        <div class="flex items-start justify-between mb-4">
+          <div class="flex items-center gap-3">
+            <span class="text-3xl">{s.logo}</span>
+            <div>
+              <a href={s.url} target="_blank" class="text-xl font-bold text-white hover:text-sky-400 transition">{s.name} ↗</a>
+              <p class="text-slate-400 text-sm">{s.tagline}</p>
+            </div>
+          </div>
+          <span class="px-2 py-1 bg-slate-800 text-slate-400 text-xs font-mono rounded">{s.lang}</span>
+        </div>
+
+        <div class="space-y-3">
+          <div>
+            <span class="text-xs font-mono text-sky-400 uppercase tracking-wide">What it uses Raft for</span>
+            <p class="text-slate-300 text-sm mt-1 leading-relaxed">{s.uses}</p>
+          </div>
+          <div>
+            <span class="text-xs font-mono text-yellow-400 uppercase tracking-wide">Why Raft</span>
+            <p class="text-slate-400 text-sm mt-1 leading-relaxed">{s.why}</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-mono text-slate-500 uppercase tracking-wide">Scale:</span>
+            <span class="text-xs text-slate-400">{s.scale}</span>
+          </div>
+        </div>
+      </div>
+    ))}
+  </section>
+
+  <!-- When to use Raft -->
+  <section class="max-w-4xl mx-auto px-4 py-12">
+    <h2 class="text-2xl font-bold text-white mb-6">When should YOU use Raft?</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div class="bg-slate-900 rounded-xl border border-green-800/40 p-5">
+        <h3 class="text-green-400 font-semibold mb-3">✓ Good fit</h3>
+        <ul class="text-slate-400 text-sm space-y-2 list-disc list-inside">
+          <li>Config stores and service registries</li>
+          <li>Distributed databases needing ACID</li>
+          <li>Leader election for other systems</li>
+          <li>Distributed locks / leases</li>
+          <li>Any system where consistency {">"} availability</li>
+        </ul>
+      </div>
+      <div class="bg-slate-900 rounded-xl border border-red-800/40 p-5">
+        <h3 class="text-red-400 font-semibold mb-3">✗ Poor fit</h3>
+        <ul class="text-slate-400 text-sm space-y-2 list-disc list-inside">
+          <li>High-throughput append-only logs (use Kafka)</li>
+          <li>Eventually consistent stores (use Cassandra)</li>
+          <li>Geo-distributed low-latency writes (RTT kills you)</li>
+          <li>Systems needing Byzantine fault tolerance</li>
+          <li>When availability {">"} consistency</li>
+        </ul>
+      </div>
+    </div>
+    <div class="bg-slate-900 rounded-xl border border-slate-700 p-5">
+      <p class="text-slate-400 text-sm leading-relaxed">
+        <strong class="text-slate-200">Rule of thumb:</strong> If you're building something where two nodes
+        having different answers would cause a serious bug (data corruption, duplicate processing, wrong routing),
+        you probably need consensus. If stale reads are acceptable, you don't.
+        Start with an existing Raft library (<code class="text-sky-300">hashicorp/raft</code>, <code class="text-sky-300">etcd/raft</code>,
+        <code class="text-sky-300">openraft</code>) rather than rolling your own.
+      </p>
+    </div>
+  </section>
+
+  <section class="max-w-4xl mx-auto px-4 py-6">
+    <div class="flex justify-between items-center">
+      <a href={`${base}/raft`} class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition text-sm">← How Raft Works</a>
+      <a href={`${base}/code`} class="px-6 py-3 bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg transition">Next: Code →</a>
+    </div>
+  </section>
+</Base>

@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@theme {
+  --color-raft-blue: #2563eb;
+  --color-raft-dark: #0f172a;
+  --color-raft-gray: #1e293b;
+  --color-raft-accent: #38bdf8;
+  --color-leader: #f59e0b;
+  --color-follower: #6366f1;
+  --color-candidate: #10b981;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-raft-dark);
+  color: #e2e8f0;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.node-circle {
+  transition: all 0.3s ease;
+}
+
+.log-entry {
+  transition: background-color 0.4s ease;
+}
