@@ -101,15 +101,15 @@ const tv = t.visualizer;
   </section>
 
   <!-- Main content grid -->
-  <section class="max-w-6xl mx-auto px-4 pb-12">
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+  <section class="max-w-7xl mx-auto px-4 pb-12">
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
 
-      <!-- Left: SVG cluster (takes 2 cols) -->
-      <div class="lg:col-span-2 flex flex-col gap-4">
+      <!-- Left: SVG cluster (takes 3 cols) -->
+      <div class="lg:col-span-3 flex flex-col gap-4">
 
         <!-- SVG canvas -->
         <div class="bg-slate-900 border border-slate-700 rounded-xl p-4">
-          <svg id="viz-svg" viewBox="0 0 600 380" class="w-full" style="height:380px">
+          <svg id="viz-svg" viewBox="0 0 800 460" class="w-full" style="height:460px">
             <defs>
               <filter id="glow-filter" x="-40%" y="-40%" width="180%" height="180%">
                 <feGaussianBlur stdDeviation="4" result="blur"/>
@@ -117,6 +117,7 @@ const tv = t.visualizer;
               </filter>
             </defs>
             <g id="viz-edges"></g>
+            <g id="viz-client"></g>
             <g id="viz-nodes"></g>
             <g id="viz-packets"></g>
             <!-- Tooltip -->
@@ -148,7 +149,7 @@ const tv = t.visualizer;
 
       </div>
 
-      <!-- Right: Node detail + Event log -->
+      <!-- Right: Node detail + Event log (1 col) -->
       <div class="flex flex-col gap-4">
 
         <!-- Node detail panel -->
@@ -170,7 +171,7 @@ const tv = t.visualizer;
   </section>
 
   <!-- KV Store Terminal -->
-  <section class="max-w-6xl mx-auto px-4 pb-12">
+  <section class="max-w-7xl mx-auto px-4 pb-12">
     <div class="bg-black border border-slate-700 rounded-xl overflow-hidden font-mono" id="kv-terminal">
       <!-- Terminal header -->
       <div class="flex items-center gap-2 px-4 py-2.5 bg-slate-900 border-b border-slate-700">
@@ -234,8 +235,8 @@ const tv = t.visualizer;
 
   const NODE_R = 30;
   const TIMER_R = NODE_R + 12; // radius of election timer ring
-  const SVG_W = 600;
-  const SVG_H = 380;
+  const SVG_W = 800;
+  const SVG_H = 460;
   const LANG = 'en';
 
   // Election timeout in ms (simulated)
@@ -289,9 +290,39 @@ const tv = t.visualizer;
   // ─── DOM refs ─────────────────────────────────────────────────────────────────
 
   const svgEl = document.getElementById('viz-svg') as SVGSVGElement;
-  const edgesG = document.getElementById('viz-edges') as SVGGElement;
-  const nodesG = document.getElementById('viz-nodes') as SVGGElement;
+  const edgesG   = document.getElementById('viz-edges')   as SVGGElement;
+  const clientG  = document.getElementById('viz-client')  as SVGGElement;
+  const nodesG   = document.getElementById('viz-nodes')   as SVGGElement;
   const packetsG = document.getElementById('viz-packets') as SVGGElement;
+
+  // ─── Permanent client node ────────────────────────────────────────────────────
+  const CLIENT_X = SVG_W / 2;
+  const CLIENT_Y = SVG_H - 36;
+  const CLIENT_COLOR = '#a855f7';
+
+  (() => {
+    // Outer ring
+    const ring = svgMake('circle', {
+      cx: CLIENT_X, cy: CLIENT_Y, r: 22,
+      fill: '#a855f708', stroke: CLIENT_COLOR,
+      'stroke-width': 1.5, 'stroke-dasharray': '4 3', opacity: 0.7,
+    });
+    // Inner filled circle
+    const dot = svgMake('circle', {
+      cx: CLIENT_X, cy: CLIENT_Y, r: 14,
+      fill: '#581c87', stroke: CLIENT_COLOR, 'stroke-width': 1.5,
+    });
+    // Label inside
+    const lbl = svgMake('text', {
+      x: CLIENT_X, y: CLIENT_Y + 1,
+      'text-anchor': 'middle', 'dominant-baseline': 'middle',
+      fill: '#d8b4fe', 'font-size': 9,
+      'font-family': 'JetBrains Mono, monospace', 'font-weight': 'bold',
+      'pointer-events': 'none',
+    });
+    lbl.textContent = 'client';
+    clientG.append(ring, dot, lbl);
+  })();
   const tooltipG = document.getElementById('viz-tooltip') as SVGGElement;
   const tooltipBg = document.getElementById('viz-tooltip-bg') as SVGRectElement;
   const tooltipText = document.getElementById('viz-tooltip-text') as SVGTextElement;
@@ -1014,10 +1045,8 @@ const tv = t.visualizer;
     const leaderPos = positions[leaderId - 1];
     if (!leaderPos) return;
 
-    // Client dot — a small labeled circle anchored to bottom-center of SVG
-    const clientX = SVG_W / 2;
-    const clientY = SVG_H - 18;
-    const CLIENT_COLOR = '#a855f7';
+    const clientX = CLIENT_X;
+    const clientY = CLIENT_Y;
     const ACK_COLOR = '#22d3ee';
 
     // 1. Client → leader (purple "write")
@@ -1050,22 +1079,14 @@ const tv = t.visualizer;
       }
     });
 
-    // Draw a subtle client indicator dot that pulses
-    const clientDot = svgMake('circle', { cx: clientX, cy: clientY, r: 5, fill: CLIENT_COLOR, opacity: 0.9 });
-    const clientLbl = svgMake('text', {
-      x: clientX, y: clientY - 10,
-      'text-anchor': 'middle', fill: '#c4b5fd',
-      'font-size': 8, 'font-family': 'JetBrains Mono, monospace',
-      'pointer-events': 'none',
-    });
-    clientLbl.textContent = 'client';
-    packetsG.append(clientDot, clientLbl);
-    waapi.animate(clientDot, { opacity: [0.9, 0.3, 0.9], duration: 800, loop: 2,
-      onComplete: () => { clientDot.remove(); clientLbl.remove(); }
-    });
-    waapi.animate(clientLbl, { opacity: [1, 0], duration: 1600, delay: 400,
-      onComplete: () => clientLbl.remove()
-    });
+    // Pulse the permanent client node to show activity
+    const clientNodeDot = clientG.querySelector('circle:nth-child(2)') as SVGCircleElement | null;
+    if (clientNodeDot) {
+      waapi.animate(clientNodeDot, {
+        r: [14, 18, 14], opacity: [1, 0.6, 1],
+        duration: 600, loop: 2,
+      });
+    }
   }
 
   async function kvExecWrite(op: 'SET' | 'DEL', key: string, value?: string): Promise<void> {
