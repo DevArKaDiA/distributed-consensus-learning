@@ -491,8 +491,9 @@ const tv = t.visualizer;
         const tipW = textW + PAD_X * 2;
         const tipH = LINE_H + 11 + PAD_Y * 2;
 
-        const tipX = pos.x;
-        const tipY = pos.y - NODE_R - tipH - 6;
+        const tipX = Math.min(Math.max(pos.x, tipW / 2 + 4), SVG_W - tipW / 2 - 4);
+        const above = pos.y - NODE_R - tipH - 6;
+        const tipY = above >= 4 ? above : pos.y + NODE_R + 6;
 
         tooltipText.setAttribute('x', String(tipX));
         tooltipText.setAttribute('y', String(tipY + PAD_Y + 11));
