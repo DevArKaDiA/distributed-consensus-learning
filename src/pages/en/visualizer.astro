@@ -91,6 +91,7 @@ const tv = t.visualizer;
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span>{tv.legend_candidate}</span>
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-amber-500 inline-block"></span>{tv.legend_leader}</span>
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-slate-600 inline-block"></span>{tv.legend_dead}</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-cyan-400 inline-block"></span>learner</span>
             <span class="flex items-center gap-1.5"><span class="w-3 h-0.5 bg-indigo-400 inline-block rounded"></span>election timer</span>
           </div>
         </div>
@@ -188,12 +189,14 @@ const tv = t.visualizer;
     candidate: '#10b981',
     leader:    '#f59e0b',
     dead:      '#374151',
+    learner:   '#22d3ee',
   };
   const FILL_ALPHA: Record<string, string> = {
     follower:  '#6366f118',
     candidate: '#10b98118',
     leader:    '#f59e0b22',
     dead:      '#37415108',
+    learner:   '#22d3ee18',
   };
 
   const PACKET_LABEL: Record<string, string> = {
@@ -266,7 +269,7 @@ const tv = t.visualizer;
 
   interface LiveNode {
     id: number;
-    state: 'follower' | 'candidate' | 'leader' | 'dead';
+    state: 'follower' | 'candidate' | 'leader' | 'dead' | 'learner';
     term: number;
     votedFor: number | null;
     log: LogEntry[];
@@ -274,6 +277,7 @@ const tv = t.visualizer;
     electionTimer: ReturnType<typeof setTimeout> | null;
     electionTimeout: number; // ms before speed divisor
     votesReceived: number;
+    syncProgress?: number; // 0–1 during learner catch-up
   }
 
   interface LiveCluster {
@@ -487,6 +491,32 @@ const tv = t.visualizer;
       g.appendChild(labelId);
       g.appendChild(labelState);
       g.appendChild(labelTerm);
+
+      // Learner: sync progress arc (cyan, fills clockwise as catch-up progresses)
+      if (node.state === 'learner') {
+        const syncR = NODE_R + 8;
+        const syncCirc = 2 * Math.PI * syncR;
+        const pct = node.syncProgress ?? 0;
+        const syncArc = svgMake('circle', {
+          cx: pos.x, cy: pos.y, r: syncR,
+          fill: 'none', stroke: '#22d3ee', 'stroke-width': 3,
+          'stroke-dasharray': `${syncCirc * pct} ${syncCirc * (1 - pct)}`,
+          'stroke-dashoffset': syncCirc * 0.25, // start at top
+          'stroke-linecap': 'round', opacity: 0.8,
+          style: 'pointer-events:none; transform-origin: center; transform: rotate(-90deg)',
+        });
+        // Also show "syncing…" label
+        const syncLbl = svgMake('text', {
+          x: pos.x, y: pos.y + 22,
+          'text-anchor': 'middle', fill: '#22d3ee',
+          'font-size': 8, 'font-family': 'JetBrains Mono, monospace',
+          style: 'pointer-events:none',
+        });
+        syncLbl.textContent = `${Math.round(pct * 100)}%`;
+        g.appendChild(syncArc);
+        g.appendChild(syncLbl);
+      }
+
       nodesG.appendChild(g);
 
       // Hover tooltip
@@ -687,6 +717,7 @@ const tv = t.visualizer;
     return liveCluster.nodes.filter(n =>
       n.id !== fromId &&
       n.state !== 'dead' &&
+      n.state !== 'learner' &&   // learners don't participate in elections
       !isolatedNodes.has(n.id)
     );
   }
@@ -902,11 +933,12 @@ const tv = t.visualizer;
     nodeCount++;
     nodeCountLabel.textContent = String(nodeCount);
 
-    // Get current cluster term so the new node joins up-to-date
     const currentTerm = liveCluster.nodes.reduce((max, n) => Math.max(max, n.term), 0);
+    const leader = getLeader();
+
     const newNode: LiveNode = {
       id: nodeCount,
-      state: 'follower',
+      state: 'learner',      // non-voting until caught up
       term: currentTerm,
       votedFor: null,
       log: [],
@@ -914,11 +946,76 @@ const tv = t.visualizer;
       electionTimer: null,
       electionTimeout: randInt(ET_MIN, ET_MAX),
       votesReceived: 0,
+      syncProgress: 0,
     };
     liveCluster.nodes.push(newNode);
-    scheduleElectionTimer(newNode);
-    setNarration('node_joined', `N${newNode.id} joined the cluster as follower (term ${currentTerm})`);
     renderCluster();
+
+    setNarration('node_joining', `N${newNode.id} joining as learner — catching up with leader`);
+
+    // ── Catch-up simulation ────────────────────────────────────────────────
+    // Animate AE packets from leader (or any live node) to the new learner
+    // while incrementally updating syncProgress
+    const CATCHUP_STEPS = 5;
+    const stepDelay = Math.round(400 / speedMultiplier);
+    const sourceId = leader ? leader.id : liveCluster.nodes.find(n => n.state !== 'dead' && n.id !== newNode.id)?.id;
+
+    let step = 0;
+    function catchupStep() {
+      step++;
+      newNode.syncProgress = step / CATCHUP_STEPS;
+
+      // Animate an AE packet from source to new node
+      if (sourceId) {
+        const positions = nodePositions(liveCluster.nodes.length);
+        const srcPos = positions[sourceId - 1];
+        const dstPos = positions[newNode.id - 1];
+        if (srcPos && dstPos) {
+          kvSpawnPacket(srcPos.x, srcPos.y, dstPos.x, dstPos.y, '#f59e0b', 'AE', 0, undefined);
+        }
+      }
+
+      renderCluster();
+
+      if (step < CATCHUP_STEPS) {
+        setTimeout(catchupStep, stepDelay);
+      } else {
+        // ── Membership change entry ──────────────────────────────────────
+        // Leader commits ADD_NODE entry, then node becomes full voter
+        setTimeout(() => {
+          if (leader) {
+            const entry = { term: currentTerm, command: `ADD_NODE N${newNode.id}`, committed: false };
+            liveCluster.nodes.forEach(n => {
+              if (n.state !== 'dead') n.log.push({ ...entry });
+            });
+            renderCluster();
+            setTimeout(() => {
+              liveCluster.nodes.forEach(n => {
+                const e = n.log[n.log.length - 1];
+                if (e && e.command === `ADD_NODE N${newNode.id}`) {
+                  e.committed = true;
+                  n.commitIndex = n.log.length - 1;
+                }
+              });
+              // Promote to full voter
+              newNode.state = 'follower';
+              newNode.syncProgress = undefined;
+              scheduleElectionTimer(newNode);
+              setNarration('node_joined', `N${newNode.id} caught up and promoted to voter (term ${currentTerm})`);
+              renderCluster();
+            }, stepDelay);
+          } else {
+            // No leader: just promote directly
+            newNode.state = 'follower';
+            newNode.syncProgress = undefined;
+            scheduleElectionTimer(newNode);
+            setNarration('node_joined', `N${newNode.id} ready — waiting for a leader to sync`);
+            renderCluster();
+          }
+        }, stepDelay);
+      }
+    }
+    setTimeout(catchupStep, stepDelay);
   });
 
   btnRemoveNode.addEventListener('click', () => {
