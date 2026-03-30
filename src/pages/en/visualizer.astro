@@ -901,16 +901,47 @@ const tv = t.visualizer;
     if (nodeCount >= 9) return;
     nodeCount++;
     nodeCountLabel.textContent = String(nodeCount);
-    initCluster(nodeCount);
-    resetSimulation();
+
+    // Get current cluster term so the new node joins up-to-date
+    const currentTerm = liveCluster.nodes.reduce((max, n) => Math.max(max, n.term), 0);
+    const newNode: LiveNode = {
+      id: nodeCount,
+      state: 'follower',
+      term: currentTerm,
+      votedFor: null,
+      log: [],
+      commitIndex: -1,
+      electionTimer: null,
+      electionTimeout: randInt(ET_MIN, ET_MAX),
+      votesReceived: 0,
+    };
+    liveCluster.nodes.push(newNode);
+    scheduleElectionTimer(newNode);
+    setNarration('node_joined', `N${newNode.id} joined the cluster as follower (term ${currentTerm})`);
+    renderCluster();
   });
 
   btnRemoveNode.addEventListener('click', () => {
     if (nodeCount <= 3) return;
+    const removedId = nodeCount;
     nodeCount--;
     nodeCountLabel.textContent = String(nodeCount);
-    initCluster(nodeCount);
-    resetSimulation();
+
+    const node = liveCluster.nodes.find(n => n.id === removedId);
+    if (node) {
+      const wasLeader = node.state === 'leader';
+      stopNodeTimer(node);
+      if (wasLeader && heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+      }
+      liveCluster.nodes = liveCluster.nodes.filter(n => n.id !== removedId);
+      const msg = wasLeader
+        ? `N${removedId} removed (was leader) — election pending`
+        : `N${removedId} removed from cluster`;
+      setNarration('node_left', msg);
+    }
+    renderCluster();
   });
 
   // ─── Node detail panel ───────────────────────────────────────────────────────
