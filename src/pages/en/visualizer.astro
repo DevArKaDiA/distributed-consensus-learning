@@ -1278,12 +1278,39 @@ const tv = t.visualizer;
   kvPrint('  type help for available commands', 'text-slate-500');
   kvPrint('  use the cluster-admin shell below to kill/revive nodes or create partitions', 'text-slate-600');
   kvTerminal.addEventListener('click', () => kvInput.focus());
-  kvInput.addEventListener('keydown', async (e: KeyboardEvent) => {
-    if (e.key !== 'Enter') return;
-    const val = kvInput.value;
-    kvInput.value = '';
-    await kvHandleCommand(val);
-  });
+  // ─── Terminal history helper ──────────────────────────────────────────────────
+  function makeHistory(input: HTMLInputElement, handler: (cmd: string) => Promise<void>) {
+    const history: string[] = [];
+    let cursor = -1;
+    let draft = '';  // preserve what user was typing before going into history
+
+    input.addEventListener('keydown', async (e: KeyboardEvent) => {
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (history.length === 0) return;
+        if (cursor === -1) draft = input.value;  // save current draft
+        cursor = Math.min(cursor + 1, history.length - 1);
+        input.value = history[cursor];
+        // move caret to end
+        setTimeout(() => input.setSelectionRange(input.value.length, input.value.length), 0);
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (cursor === -1) return;
+        cursor--;
+        input.value = cursor === -1 ? draft : history[cursor];
+        setTimeout(() => input.setSelectionRange(input.value.length, input.value.length), 0);
+      } else if (e.key === 'Enter') {
+        const val = input.value.trim();
+        input.value = '';
+        cursor = -1;
+        draft = '';
+        if (val) history.unshift(val);  // newest first
+        await handler(val);
+      }
+    });
+  }
+
+  makeHistory(kvInput, kvHandleCommand);
 
   // ─── Cluster Admin Shell ──────────────────────────────────────────────────────
 
@@ -1480,12 +1507,7 @@ const tv = t.visualizer;
   adminPrint('  ⚠ mutations apply to live simulation state', 'text-amber-900/60');
   adminPrint('  type help for available commands', 'text-slate-600');
   adminTerminal.addEventListener('click', () => adminInput.focus());
-  adminInput.addEventListener('keydown', async (e: KeyboardEvent) => {
-    if (e.key !== 'Enter') return;
-    const val = adminInput.value;
-    adminInput.value = '';
-    await adminHandleCommand(val);
-  });
+  makeHistory(adminInput, adminHandleCommand);
 
   // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
