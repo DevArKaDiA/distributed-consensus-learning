@@ -77,10 +77,12 @@ function initCluster(n = 5): ClusterState {
 
 // ─── Scenario generators ──────────────────────────────────────────────────────
 
-function normalOperation(): SimEvent[] {
+function normalOperation(nodeCount = 5): SimEvent[] {
   const events: SimEvent[] = [];
   let t = 0;
-  const cluster = initCluster(5);
+  const cluster = initCluster(nodeCount);
+  const majority = Math.floor(nodeCount / 2) + 1;
+  const allIds = cluster.nodes.map(n => n.id);
 
   const tick = (ms: number) => { t += ms; };
 
@@ -151,12 +153,13 @@ function normalOperation(): SimEvent[] {
     "N3 gana la elección con 3 votos — mayoría. Envía heartbeats a todos los seguidores inmediatamente para establecer su autoridad y reiniciar sus temporizadores."
   );
 
-  // Update remaining nodes
-  cluster.nodes[3].term = 2;
-  cluster.nodes[4].term = 2;
+  // Update remaining nodes (only if they exist)
+  if (cluster.nodes[3]) cluster.nodes[3].term = 2;
+  if (cluster.nodes[4]) cluster.nodes[4].term = 2;
 
-  // 7-10. Heartbeats
-  for (const id of [1, 2, 4, 5]) {
+  // Heartbeats to all followers (all except N3 which is now leader)
+  const followerIds = allIds.filter(id => id !== 3);
+  for (const id of followerIds) {
     tick(20);
     emit('heartbeat', { from: 3, to: id, term: 2 },
       `N3 sends a heartbeat to N${id}. This resets N${id}'s election timer — it won't start a new election as long as heartbeats keep arriving within the timeout window.`,
@@ -172,9 +175,9 @@ function normalOperation(): SimEvent[] {
     `Un cliente envía el comando "${cmd1}" a N3 (el líder). Solo el líder acepta escrituras — los seguidores redirigen los clientes al líder.`
   );
 
-  // 12-15. AppendEntries to each follower
+  // AppendEntries to each follower
   cluster.nodes[2].log.push({ term: 2, command: cmd1, committed: false });
-  for (const id of [1, 2, 4, 5]) {
+  for (const id of followerIds) {
     tick(15);
     cluster.nodes[id - 1].log.push({ term: 2, command: cmd1, committed: false });
     emit('append_entries', { from: 3, to: id, term: 2, command: cmd1, logIndex: 0 },
@@ -183,16 +186,16 @@ function normalOperation(): SimEvent[] {
     );
   }
 
-  // 16-19. ACKs from followers
+  // ACKs from followers
   let acks = 0;
-  for (const id of [1, 2, 4, 5]) {
+  for (const id of followerIds) {
     tick(20);
     acks++;
     emit('append_ack', { from: id, to: 3, term: 2, logIndex: 0 },
-      `N${id} successfully appended the entry and sends an ACK back to N3. N3 now has ${acks + 1} ACKs (including itself). ${acks >= 2 ? 'Majority reached!' : `Waiting for majority (need ${3 - acks} more).`}`,
-      `N${id} añadió la entrada correctamente y envía un ACK a N3. N3 tiene ahora ${acks + 1} ACKs (incluido él mismo). ${acks >= 2 ? '¡Mayoría alcanzada!' : `Esperando mayoría (faltan ${3 - acks}).`}`
+      `N${id} successfully appended the entry and sends an ACK back to N3. N3 now has ${acks + 1} ACKs (including itself). ${acks + 1 >= majority ? 'Majority reached!' : `Waiting for majority (need ${majority - acks - 1} more).`}`,
+      `N${id} añadió la entrada correctamente y envía un ACK a N3. N3 tiene ahora ${acks + 1} ACKs (incluido él mismo). ${acks + 1 >= majority ? '¡Mayoría alcanzada!' : `Esperando mayoría (faltan ${majority - acks - 1}).`}`
     );
-    if (acks === 2) {
+    if (acks + 1 === majority) {
       // Commit
       tick(10);
       for (const n of cluster.nodes) {
@@ -200,8 +203,8 @@ function normalOperation(): SimEvent[] {
         n.commitIndex = 0;
       }
       emit('entry_committed', { nodeId: 3, command: cmd1, logIndex: 0, term: 2 },
-        `A majority of nodes (3 out of 5) have written "${cmd1}" to their logs. N3 marks the entry as committed and applies it to its state machine. It will notify followers of the commit in the next AppendEntries.`,
-        `La mayoría de nodos (3 de 5) han escrito "${cmd1}" en sus logs. N3 marca la entrada como confirmada y la aplica a su máquina de estado. Notificará a los seguidores en el próximo AppendEntries.`
+        `A majority of nodes (${majority} out of ${nodeCount}) have written "${cmd1}" to their logs. N3 marks the entry as committed and applies it to its state machine.`,
+        `La mayoría de nodos (${majority} de ${nodeCount}) han escrito "${cmd1}" en sus logs. N3 marca la entrada como confirmada y la aplica a su máquina de estado.`
       );
     }
   }
@@ -215,7 +218,7 @@ function normalOperation(): SimEvent[] {
   );
 
   cluster.nodes[2].log.push({ term: 2, command: cmd2, committed: false });
-  for (const id of [1, 2, 4, 5]) {
+  for (const id of followerIds) {
     tick(12);
     cluster.nodes[id - 1].log.push({ term: 2, command: cmd2, committed: false });
     emit('append_entries', { from: 3, to: id, term: 2, command: cmd2, logIndex: 1 },
@@ -224,7 +227,7 @@ function normalOperation(): SimEvent[] {
     );
   }
 
-  for (const id of [1, 2, 4, 5]) {
+  for (const id of followerIds) {
     tick(18);
     emit('append_ack', { from: id, to: 3, term: 2, logIndex: 1 },
       `N${id} ACKs the second entry. Replication is proceeding normally.`,
@@ -245,10 +248,15 @@ function normalOperation(): SimEvent[] {
   return events;
 }
 
-function leaderCrashScenario(): SimEvent[] {
+function leaderCrashScenario(nodeCount = 5): SimEvent[] {
   const events: SimEvent[] = [];
   let t = 0;
-  const cluster = initCluster(5);
+  const cluster = initCluster(nodeCount);
+  const majority = Math.floor(nodeCount / 2) + 1;
+  const allIds = cluster.nodes.map(n => n.id);
+  // Use nodes 1 as leader, N2 as candidate after crash (or last node if <4)
+  const candidateIdx = Math.min(3, nodeCount - 1); // 0-based: node index 3 = N4, or last
+  const candidateId = cluster.nodes[candidateIdx].id;
 
   const tick = (ms: number) => { t += ms; };
   const emit = (type: EventType, fields: Partial<SimEvent>, en: string, es: string) => {
@@ -276,7 +284,8 @@ function leaderCrashScenario(): SimEvent[] {
     `Un cliente envía "${cmd}" al líder N1. N1 lo añade a su log e inicia la replicación.`
   );
 
-  for (const id of [2, 3, 4, 5]) {
+  const followerIds = allIds.filter(id => id !== 1);
+  for (const id of followerIds) {
     tick(10);
     cluster.nodes[id - 1].log.push({ term: 1, command: cmd, committed: false });
     emit('append_entries', { from: 1, to: id, term: 1, command: cmd, logIndex: 0 },
@@ -303,47 +312,48 @@ function leaderCrashScenario(): SimEvent[] {
     "N1 ha caído inesperadamente. Los seguidores esperarán un heartbeat. Tras expirar su timeout de elección (150–300ms con jitter aleatorio), uno de ellos iniciará una nueva elección."
   );
 
-  // N4 times out first
+  // candidateId times out first
   tick(210);
-  cluster.nodes[3].state = 'candidate';
-  cluster.nodes[3].term = 2;
-  cluster.nodes[3].votedFor = 4;
+  cluster.nodes[candidateIdx].state = 'candidate';
+  cluster.nodes[candidateIdx].term = 2;
+  cluster.nodes[candidateIdx].votedFor = candidateId;
   cluster.term = 2;
-  emit('election_timeout', { nodeId: 4, term: 2 },
-    "N4's election timer fires first (randomized timeouts ensure only one node usually starts at a time). N4 increments its term to 2, votes for itself, and sends RequestVote to all live peers.",
-    "El temporizador de N4 expira primero (los timeouts aleatorios aseguran que normalmente solo un nodo empiece a la vez). N4 incrementa su término a 2, se vota a sí mismo y envía RequestVote a todos los pares vivos."
+  emit('election_timeout', { nodeId: candidateId, term: 2 },
+    `N${candidateId}'s election timer fires first (randomized timeouts ensure only one node usually starts at a time). N${candidateId} increments its term to 2, votes for itself, and sends RequestVote to all live peers.`,
+    `El temporizador de N${candidateId} expira primero. N${candidateId} incrementa su término a 2, se vota a sí mismo y envía RequestVote a todos los pares vivos.`
   );
 
-  for (const id of [2, 3, 5]) {
+  const voteTargets = followerIds.filter(id => id !== candidateId);
+  for (const id of voteTargets) {
     tick(10);
-    emit('request_vote', { from: 4, to: id, term: 2 },
-      `N4 requests a vote from N${id}. N4's log contains the committed entry at index 0 from term 1, so it's at least as up-to-date as N${id}'s log.`,
-      `N4 solicita el voto de N${id}. El log de N4 contiene la entrada confirmada en el índice 0 del término 1, por lo que está tan actualizado como el log de N${id}.`
+    emit('request_vote', { from: candidateId, to: id, term: 2 },
+      `N${candidateId} requests a vote from N${id}. Its log contains the committed entry, so it's at least as up-to-date.`,
+      `N${candidateId} solicita el voto de N${id}. Su log contiene la entrada confirmada, por lo que está tan actualizado.`
     );
   }
 
-  for (const id of [2, 3, 5]) {
+  for (const id of voteTargets) {
     tick(25);
     cluster.nodes[id - 1].term = 2;
-    cluster.nodes[id - 1].votedFor = 4;
-    emit('vote_granted', { from: id, to: 4, term: 2 },
-      `N${id} grants its vote to N4. It updates its term to 2 and resets its votedFor.`,
-      `N${id} concede su voto a N4. Actualiza su término a 2 y reinicia su votedFor.`
+    cluster.nodes[id - 1].votedFor = candidateId;
+    emit('vote_granted', { from: id, to: candidateId, term: 2 },
+      `N${id} grants its vote to N${candidateId}. It updates its term to 2.`,
+      `N${id} concede su voto a N${candidateId}. Actualiza su término a 2.`
     );
   }
 
   tick(20);
-  cluster.nodes[3].state = 'leader';
-  emit('leader_elected', { nodeId: 4, term: 2 },
-    "N4 wins the election with 4 votes (itself + N2 + N3 + N5). N1 is still dead. N4 immediately sends heartbeats to re-establish authority and ensure followers' logs are consistent with its own.",
-    "N4 gana la elección con 4 votos (él mismo + N2 + N3 + N5). N1 sigue caído. N4 envía heartbeats inmediatamente para restablecer su autoridad y asegurar que los logs de los seguidores son consistentes con el suyo."
+  cluster.nodes[candidateIdx].state = 'leader';
+  emit('leader_elected', { nodeId: candidateId, term: 2 },
+    `N${candidateId} wins the election. N1 is still dead. N${candidateId} immediately sends heartbeats to re-establish authority.`,
+    `N${candidateId} gana la elección. N1 sigue caído. N${candidateId} envía heartbeats inmediatamente para restablecer su autoridad.`
   );
 
-  for (const id of [2, 3, 5]) {
+  for (const id of voteTargets) {
     tick(15);
-    emit('heartbeat', { from: 4, to: id, term: 2 },
-      `N4 sends a heartbeat to N${id} as new leader of term 2. The cluster is resilient — it lost one node but still has a majority (4 of 5) and continues operating.`,
-      `N4 envía un heartbeat a N${id} como nuevo líder del término 2. El cluster es resiliente — perdió un nodo pero aún tiene mayoría (4 de 5) y continúa operando.`
+    emit('heartbeat', { from: candidateId, to: id, term: 2 },
+      `N${candidateId} sends a heartbeat to N${id} as new leader of term 2. The cluster is resilient — it lost one node but still has a majority and continues operating.`,
+      `N${candidateId} envía un heartbeat a N${id} como nuevo líder del término 2. El cluster es resiliente — perdió un nodo pero aún tiene mayoría y continúa operando.`
     );
   }
 
@@ -353,17 +363,25 @@ function leaderCrashScenario(): SimEvent[] {
   cluster.nodes[0].term = 2;
   cluster.nodes[0].votedFor = null;
   emit('node_recover', { nodeId: 1 },
-    "N1 has recovered and rejoins the cluster as a follower. It discovers the new term 2 from the first heartbeat it receives. Its log is already consistent (it had committed the only entry), so no log repair is needed.",
-    "N1 se ha recuperado y vuelve al cluster como seguidor. Descubre el nuevo término 2 en el primer heartbeat que recibe. Su log ya es consistente (tenía la única entrada confirmada), por lo que no se necesita reparación de log."
+    "N1 has recovered and rejoins the cluster as a follower. It discovers the new term 2 from the first heartbeat it receives. Its log is already consistent, so no log repair is needed.",
+    "N1 se ha recuperado y vuelve al cluster como seguidor. Descubre el nuevo término 2 en el primer heartbeat que recibe. Su log ya es consistente, por lo que no se necesita reparación de log."
   );
 
   return events;
 }
 
-function partitionScenario(): SimEvent[] {
+function partitionScenario(nodeCount = 5): SimEvent[] {
   const events: SimEvent[] = [];
   let t = 0;
-  const cluster = initCluster(5);
+  const cluster = initCluster(nodeCount);
+  const majority = Math.floor(nodeCount / 2) + 1;
+  const allIds = cluster.nodes.map(n => n.id);
+  // minority: N1 + N2, majority: rest (need at least 3 in majority)
+  const minorityIds = allIds.slice(0, Math.max(1, nodeCount - majority));
+  const majorityIds = allIds.filter(id => !minorityIds.includes(id));
+  // new candidate is first of majority partition (not N1)
+  const newCandidateId = majorityIds[0];
+  const newCandidateIdx = newCandidateId - 1;
 
   const tick = (ms: number) => { t += ms; };
   const emit = (type: EventType, fields: Partial<SimEvent>, en: string, es: string) => {
@@ -387,7 +405,7 @@ function partitionScenario(): SimEvent[] {
     `Client sends "${cmd}". N1 begins replication.`,
     `El cliente envía "${cmd}". N1 inicia la replicación.`
   );
-  for (const id of [2, 3, 4, 5]) {
+  for (const id of allIds.filter(id => id !== 1)) {
     tick(10);
     cluster.nodes[id - 1].log.push({ term: 1, command: cmd, committed: false });
     emit('append_entries', { from: 1, to: id, term: 1, command: cmd, logIndex: 0 },
@@ -395,96 +413,96 @@ function partitionScenario(): SimEvent[] {
       `N1 replica a N${id}.`
     );
   }
-  for (const n of cluster.nodes) { n.log.forEach(e => e.committed = true); n.commitIndex = 0; }
+  for (const n of cluster.nodes) { n.log.forEach(e => { e.committed = true; }); n.commitIndex = 0; }
   tick(60);
   emit('entry_committed', { nodeId: 1, command: cmd, logIndex: 0, term: 1 },
     `"${cmd}" committed successfully across the cluster.`,
     `"${cmd}" confirmado con éxito en el cluster.`
   );
 
-  // Network partition: N1, N2 isolated from N3, N4, N5
+  // Network partition
   tick(200);
-  // Simulate partition by crashing N1 from perspective of minority
-  // N1 is in minority partition (2 nodes: N1, N2) — cannot commit
-  // N3, N4, N5 form majority partition (3 nodes)
+  const minStr = minorityIds.map(id => `N${id}`).join(', ');
+  const majStr = majorityIds.map(id => `N${id}`).join(', ');
   emit('leader_crash', { nodeId: 1 },
-    "A network partition has occurred. N1 and N2 are isolated in one partition, while N3, N4, and N5 form another. N1 still believes it's leader and accepts writes — but it cannot commit them without a majority. Meanwhile, N3/N4/N5 will elect a new leader.",
-    "Se ha producido una partición de red. N1 y N2 están aislados en una partición, mientras que N3, N4 y N5 forman otra. N1 cree que sigue siendo líder y acepta escrituras — pero no puede confirmarlas sin mayoría. Mientras tanto, N3/N4/N5 elegirán un nuevo líder."
+    `A network partition has occurred. ${minStr} are isolated in one partition, while ${majStr} form another. N1 still believes it's leader but cannot commit without a majority. The majority partition will elect a new leader.`,
+    `Se ha producido una partición de red. ${minStr} están aislados, mientras que ${majStr} forman otra partición. N1 cree que sigue siendo líder pero no puede confirmar sin mayoría. La partición mayoritaria elegirá un nuevo líder.`
   );
 
-  // N3 times out (majority partition)
+  // newCandidateId times out (majority partition)
   tick(220);
-  cluster.nodes[2].state = 'candidate';
-  cluster.nodes[2].term = 2;
-  cluster.nodes[2].votedFor = 3;
+  cluster.nodes[newCandidateIdx].state = 'candidate';
+  cluster.nodes[newCandidateIdx].term = 2;
+  cluster.nodes[newCandidateIdx].votedFor = newCandidateId;
   cluster.term = 2;
-  emit('election_timeout', { nodeId: 3, term: 2 },
-    "In the majority partition, N3's timer expires. It starts a new election in term 2. N1 is unreachable, so it cannot suppress this election.",
-    "En la partición mayoritaria, expira el temporizador de N3. Inicia una nueva elección en el término 2. N1 no es alcanzable, así que no puede suprimir esta elección."
+  emit('election_timeout', { nodeId: newCandidateId, term: 2 },
+    `In the majority partition, N${newCandidateId}'s timer expires. It starts a new election in term 2. N1 is unreachable, so it cannot suppress this election.`,
+    `En la partición mayoritaria, expira el temporizador de N${newCandidateId}. Inicia una nueva elección en el término 2. N1 no es alcanzable.`
   );
 
-  for (const id of [4, 5]) {
+  const majVoters = majorityIds.filter(id => id !== newCandidateId);
+  for (const id of majVoters) {
     tick(15);
     cluster.nodes[id - 1].term = 2;
-    cluster.nodes[id - 1].votedFor = 3;
-    emit('vote_granted', { from: id, to: 3, term: 2 },
-      `N${id} grants its vote to N3. With 3 votes (itself + N4 + N5), N3 has a majority of the full cluster and wins the election.`,
-      `N${id} concede su voto a N3. Con 3 votos (él mismo + N4 + N5), N3 tiene mayoría del cluster completo y gana la elección.`
+    cluster.nodes[id - 1].votedFor = newCandidateId;
+    emit('vote_granted', { from: id, to: newCandidateId, term: 2 },
+      `N${id} grants its vote to N${newCandidateId}. With ${majorityIds.length} votes, N${newCandidateId} has a majority and wins the election.`,
+      `N${id} concede su voto a N${newCandidateId}. Con ${majorityIds.length} votos, N${newCandidateId} tiene mayoría y gana la elección.`
     );
   }
 
   tick(20);
-  cluster.nodes[2].state = 'leader';
-  emit('leader_elected', { nodeId: 3, term: 2 },
-    "N3 is now the new legitimate leader in term 2. N1 is a stale leader — still in term 1, isolated. Any writes N1 accepts cannot be committed (no quorum). Raft's safety is preserved: two leaders exist but only one (N3) can commit.",
-    "N3 es ahora el nuevo líder legítimo en el término 2. N1 es un líder obsoleto — en el término 1, aislado. Las escrituras que acepte N1 no pueden confirmarse (sin quórum). La seguridad de Raft se mantiene: existen dos líderes pero solo uno (N3) puede confirmar."
+  cluster.nodes[newCandidateIdx].state = 'leader';
+  emit('leader_elected', { nodeId: newCandidateId, term: 2 },
+    `N${newCandidateId} is now the new legitimate leader in term 2. N1 is a stale leader in the minority partition. Any writes N1 accepts cannot be committed. Raft's safety is preserved.`,
+    `N${newCandidateId} es ahora el nuevo líder legítimo en el término 2. N1 es un líder obsoleto en la partición minoritaria. La seguridad de Raft se mantiene.`
   );
 
-  // N3 accepts a write
+  // newCandidateId accepts a write
   tick(150);
   const cmd2 = 'SET region=eu';
-  cluster.nodes[2].log.push({ term: 2, command: cmd2, committed: false });
-  emit('client_request', { nodeId: 3, command: cmd2 },
-    `Client (connected to the majority partition) sends "${cmd2}" to N3. N3 replicates it to N4 and N5.`,
-    `El cliente (conectado a la partición mayoritaria) envía "${cmd2}" a N3. N3 lo replica a N4 y N5.`
+  cluster.nodes[newCandidateIdx].log.push({ term: 2, command: cmd2, committed: false });
+  emit('client_request', { nodeId: newCandidateId, command: cmd2 },
+    `Client (connected to the majority partition) sends "${cmd2}" to N${newCandidateId}. It replicates to the majority partition.`,
+    `El cliente (conectado a la partición mayoritaria) envía "${cmd2}" a N${newCandidateId}. Lo replica en la partición mayoritaria.`
   );
 
-  for (const id of [4, 5]) {
+  for (const id of majVoters) {
     tick(12);
     cluster.nodes[id - 1].log.push({ term: 2, command: cmd2, committed: false });
-    emit('append_entries', { from: 3, to: id, term: 2, command: cmd2, logIndex: 1 },
-      `N3 replicates "${cmd2}" to N${id} (majority partition only).`,
-      `N3 replica "${cmd2}" a N${id} (solo partición mayoritaria).`
+    emit('append_entries', { from: newCandidateId, to: id, term: 2, command: cmd2, logIndex: 1 },
+      `N${newCandidateId} replicates "${cmd2}" to N${id} (majority partition only).`,
+      `N${newCandidateId} replica "${cmd2}" a N${id} (solo partición mayoritaria).`
     );
   }
 
-  for (const n of [cluster.nodes[2], cluster.nodes[3], cluster.nodes[4]]) {
-    n.log.forEach(e => { if (e.command === cmd2) e.committed = true; });
-    n.commitIndex = 1;
+  for (const id of majorityIds) {
+    cluster.nodes[id - 1].log.forEach(e => { if (e.command === cmd2) e.committed = true; });
+    cluster.nodes[id - 1].commitIndex = 1;
   }
   tick(40);
-  emit('entry_committed', { nodeId: 3, command: cmd2, logIndex: 1, term: 2 },
-    `"${cmd2}" is committed with 3 ACKs (N3+N4+N5). This is safe — it's a majority of the full 5-node cluster. N1's isolated writes never committed, so there's no conflict.`,
-    `"${cmd2}" está confirmado con 3 ACKs (N3+N4+N5). Esto es seguro — es la mayoría del cluster completo de 5 nodos. Las escrituras aisladas de N1 nunca se confirmaron, por lo que no hay conflicto.`
+  emit('entry_committed', { nodeId: newCandidateId, command: cmd2, logIndex: 1, term: 2 },
+    `"${cmd2}" is committed — a majority of the full cluster confirmed it. N1's isolated writes never committed, so there's no conflict.`,
+    `"${cmd2}" está confirmado — la mayoría del cluster completo lo confirmó. Las escrituras aisladas de N1 nunca se confirmaron.`
   );
 
   // Partition heals
   tick(400);
   cluster.nodes[0].state = 'follower';
   cluster.nodes[0].term = 2;
-  cluster.nodes[1].term = 2;
+  for (const id of minorityIds) cluster.nodes[id - 1].term = 2;
   emit('node_recover', { nodeId: 1 },
-    "The network partition heals. N1 receives a heartbeat from N3 with term 2 > term 1. N1 immediately steps down as leader and becomes a follower. Its uncommitted log entries are overwritten to match N3's authoritative log.",
-    "La partición de red se repara. N1 recibe un heartbeat de N3 con término 2 > término 1. N1 inmediatamente cede el liderazgo y se convierte en seguidor. Sus entradas de log no confirmadas se sobreescriben para coincidir con el log autoritativo de N3."
+    `The network partition heals. N1 receives a heartbeat from N${newCandidateId} with term 2 > term 1. N1 immediately steps down and becomes a follower. Its uncommitted log entries are overwritten to match the authoritative log.`,
+    `La partición de red se repara. N1 recibe un heartbeat de N${newCandidateId} con término 2 > término 1. N1 inmediatamente cede el liderazgo y se convierte en seguidor.`
   );
 
   return events;
 }
 
-function splitVoteScenario(): SimEvent[] {
+function splitVoteScenario(nodeCount = 5): SimEvent[] {
   const events: SimEvent[] = [];
   let t = 0;
-  const cluster = initCluster(5);
+  const cluster = initCluster(nodeCount);
 
   const tick = (ms: number) => { t += ms; };
   const emit = (type: EventType, fields: Partial<SimEvent>, en: string, es: string) => {
@@ -607,12 +625,13 @@ function splitVoteScenario(): SimEvent[] {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-export function generateScenario(name: ScenarioName): SimEvent[] {
+export function generateScenario(name: ScenarioName, nodeCount = 5): SimEvent[] {
+  const n = Math.max(3, Math.min(9, nodeCount));
   switch (name) {
-    case 'normal':       return normalOperation();
-    case 'leader_crash': return leaderCrashScenario();
-    case 'partition':    return partitionScenario();
-    case 'split_vote':   return splitVoteScenario();
-    default:             return normalOperation();
+    case 'normal':       return normalOperation(n);
+    case 'leader_crash': return leaderCrashScenario(n);
+    case 'partition':    return partitionScenario(n);
+    case 'split_vote':   return splitVoteScenario(n);
+    default:             return normalOperation(n);
   }
 }

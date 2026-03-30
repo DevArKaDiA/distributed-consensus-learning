@@ -166,6 +166,11 @@ export const en = {
     legend_dead: 'Dead',
   },
 
+  // Acknowledgements
+  ack: {
+    ack_title: 'Acknowledgements',
+  },
+
   // Footer
   footer: {
     built: 'Built to understand distributed systems',

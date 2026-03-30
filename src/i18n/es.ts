@@ -162,6 +162,10 @@ export const es: Translations = {
     legend_dead: 'Caído',
   },
 
+  ack: {
+    ack_title: 'Agradecimientos',
+  },
+
   footer: {
     built: 'Construido para entender sistemas distribuidos',
     paper: 'Paper de Raft',

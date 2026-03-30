@@ -137,6 +137,16 @@ const lp = (path: string) => localePath(lang, path, base);
     </div>
   </section>
 
+  <section class="max-w-4xl mx-auto px-4 pb-4">
+    <div class="bg-slate-900/50 border border-slate-800 rounded-xl p-5 mt-4">
+      <h3 class="text-xs font-mono text-slate-500 uppercase tracking-wide mb-3">{t.ack.ack_title}</h3>
+      <ul class="text-slate-400 text-xs space-y-1.5 leading-relaxed">
+        <li><span class="text-slate-300">Diego Ongaro &amp; John Ousterhout</span> — <a href="https://raft.github.io/raft.pdf" target="_blank" class="text-sky-400 hover:underline">In Search of an Understandable Consensus Algorithm (2014)</a>. Todos los detalles del algoritmo en esta página derivan de este paper.</li>
+        <li><span class="text-slate-300">Ben Johnson</span> — <a href="https://github.com/ongardie/raftscope" target="_blank" class="text-sky-400 hover:underline">raftscope</a>. La visualización interactiva original de Raft que inspiró los demos de arriba.</li>
+      </ul>
+    </div>
+  </section>
+
   <section class="max-w-4xl mx-auto px-4 py-12">
     <div class="flex justify-between items-center">
       <a href={lp('/problem')} class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition text-sm">{t.raft.prev}</a>

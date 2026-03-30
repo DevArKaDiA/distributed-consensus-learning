@@ -155,6 +155,20 @@ const t = useTranslations('en');
     </div>
   </section>
 
+  <section class="max-w-4xl mx-auto px-4 pb-4">
+    <div class="bg-slate-900/50 border border-slate-800 rounded-xl p-5 mt-4">
+      <h3 class="text-xs font-mono text-slate-500 uppercase tracking-wide mb-3">{t.ack.ack_title}</h3>
+      <ul class="text-slate-400 text-xs space-y-1.5 leading-relaxed">
+        <li><span class="text-slate-300">etcd</span> — descripciones basadas en <a href="https://etcd.io/docs/" target="_blank" class="text-sky-400 hover:underline">etcd.io/docs</a>.</li>
+        <li><span class="text-slate-300">CockroachDB</span> — descripciones basadas en <a href="https://www.cockroachlabs.com/docs/" target="_blank" class="text-sky-400 hover:underline">cockroachlabs.com/docs</a>.</li>
+        <li><span class="text-slate-300">TiKV</span> — descripciones basadas en <a href="https://tikv.org/docs/" target="_blank" class="text-sky-400 hover:underline">tikv.org/docs</a>.</li>
+        <li><span class="text-slate-300">Consul</span> — descripciones basadas en <a href="https://developer.hashicorp.com/consul/docs" target="_blank" class="text-sky-400 hover:underline">developer.hashicorp.com/consul/docs</a>.</li>
+        <li><span class="text-slate-300">Apache Kafka (KRaft)</span> — descripciones basadas en <a href="https://kafka.apache.org/documentation/" target="_blank" class="text-sky-400 hover:underline">kafka.apache.org/documentation</a>.</li>
+        <li><span class="text-slate-300">Diego Ongaro &amp; John Ousterhout</span> — <a href="https://raft.github.io/raft.pdf" target="_blank" class="text-sky-400 hover:underline">Paper de Raft (2014)</a>. Base para todas las descripciones de sistemas anteriores.</li>
+      </ul>
+    </div>
+  </section>
+
   <section class="max-w-4xl mx-auto px-4 py-6">
     <div class="flex justify-between items-center">
       <a href={`${base}/raft`} class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition text-sm">← How Raft Works</a>

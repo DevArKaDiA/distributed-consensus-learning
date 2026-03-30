@@ -138,6 +138,18 @@ const base = import.meta.env.BASE_URL;
     </a>
   </section>
 
+  <section class="max-w-4xl mx-auto px-4 pb-8">
+    <div class="bg-slate-900/50 border border-slate-800 rounded-xl p-5 mt-8">
+      <h3 class="text-xs font-mono text-slate-500 uppercase tracking-wide mb-3">Acknowledgements</h3>
+      <ul class="text-slate-400 text-xs space-y-1.5 leading-relaxed">
+        <li><span class="text-slate-300">Diego Ongaro &amp; John Ousterhout</span> — <a href="https://raft.github.io/raft.pdf" target="_blank" class="text-sky-400 hover:underline">In Search of an Understandable Consensus Algorithm (2014)</a>. The original Raft paper that this site is built around.</li>
+        <li><span class="text-slate-300">Ben Johnson</span> — <a href="https://github.com/ongardie/raftscope" target="_blank" class="text-sky-400 hover:underline">raftscope</a>. Interactive Raft visualization that inspired the demos on this site.</li>
+        <li><span class="text-slate-300">The Secret Lives of Data</span> — <a href="https://thesecretlivesofdata.com/raft/" target="_blank" class="text-sky-400 hover:underline">thesecretlivesofdata.com/raft/</a>. Animated Raft walkthrough by Ben Johnson.</li>
+        <li><span class="text-slate-300">Fischer, Lynch &amp; Patterson</span> — FLP Impossibility (1985). Foundational result on the limits of distributed consensus.</li>
+      </ul>
+    </div>
+  </section>
+
   <section class="max-w-4xl mx-auto px-4 py-12">
     <div class="flex justify-start">
       <a href={`${base}/code`} class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition text-sm">← Code</a>
