@@ -1,16 +1,16 @@
 ---
 // Root redirect — detect browser language and redirect to /en or /es
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 <html>
   <head>
     <meta charset="UTF-8" />
-    <script is:inline>
-      const base = '/distributed-consensus-learning';
+    <script is:inline define:vars={{ base }}>
       const lang = navigator.language?.startsWith('es') ? 'es' : 'en';
       window.location.replace(`${base}/${lang}/`);
     </script>
     <!-- Fallback for no-JS -->
-    <meta http-equiv="refresh" content="0; url=/distributed-consensus-learning/en/" />
+    <meta http-equiv="refresh" content={`0; url=${base}/en/`} />
   </head>
   <body></body>
 </html>

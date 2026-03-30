@@ -1,7 +1,7 @@
 ---
 const lang = 'es';
 import { useTranslations, localePath } from '../../i18n';
-const t = useTranslations('en');
+const t = useTranslations(lang);
 import Base from '../../layouts/Base.astro';
 const base = import.meta.env.BASE_URL;
 const lp = (path: string) => localePath(lang, path, base);

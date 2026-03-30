@@ -1,6 +1,7 @@
 ---
 import Base from '../../layouts/Base.astro';
 import { localePath } from '../../i18n';
+import { codeToHtml } from 'shiki';
 const lang = 'es';
 const base = import.meta.env.BASE_URL;
 const lp = (path: string) => localePath(lang, path, base);
@@ -894,6 +895,14 @@ fn main() {
         println!("[N{}] kv store: {:?}", nodes[0].id, nodes[0].kv_store);
     }
 }`;
+
+// Syntax highlighting with Shiki (build-time, zero runtime JS)
+const [pyHtml, tsHtml, goHtml, rustHtml] = await Promise.all([
+  codeToHtml(pythonCode, { lang: 'python', theme: 'github-dark' }),
+  codeToHtml(tsCode,     { lang: 'typescript', theme: 'github-dark' }),
+  codeToHtml(goCode,     { lang: 'go', theme: 'github-dark' }),
+  codeToHtml(rustCode,   { lang: 'rust', theme: 'github-dark' }),
+]);
 ---
 <Base title="Code" lang={lang} description="Minimal Raft implementations in Python, TypeScript, Go, and Rust — annotated for learning.">
 
@@ -923,38 +932,74 @@ fn main() {
 
     <!-- Python -->
     <div id="code-python" class="lang-panel">
-      <div class="flex items-center justify-between mb-3">
-        <span class="text-sm text-slate-400">~180 lines · covers election + log replication + state machine</span>
-        <button class="copy-btn px-3 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition" data-target="py-code">Copy</button>
+      <p class="text-sm text-slate-400 mb-3">~180 lines · covers election + log replication + state machine</p>
+      <div class="code-block rounded-xl overflow-hidden border border-slate-700">
+        <div class="code-header flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#3572A5]"></span>
+            <span class="text-xs font-mono text-slate-300 font-semibold">Python</span>
+          </div>
+          <button class="copy-btn flex items-center gap-1.5 px-2.5 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition" data-lang="python">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+            Copy
+          </button>
+        </div>
+        <div class="shiki-wrapper overflow-x-auto overflow-y-auto max-h-[600px] text-[13px] leading-relaxed" set:html={pyHtml} />
       </div>
-      <pre id="py-code" class="bg-slate-950 rounded-xl border border-slate-700 p-5 text-xs font-mono text-slate-300 overflow-x-auto overflow-y-auto max-h-[600px] leading-relaxed whitespace-pre">{pythonCode}</pre>
     </div>
 
     <!-- TypeScript -->
     <div id="code-typescript" class="lang-panel hidden">
-      <div class="flex items-center justify-between mb-3">
-        <span class="text-sm text-slate-400">~140 lines · same logic, typed interfaces make the protocol explicit</span>
-        <button class="copy-btn px-3 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition" data-target="ts-code">Copy</button>
+      <p class="text-sm text-slate-400 mb-3">~140 lines · same logic, typed interfaces make the protocol explicit</p>
+      <div class="code-block rounded-xl overflow-hidden border border-slate-700">
+        <div class="code-header flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#3178C6]"></span>
+            <span class="text-xs font-mono text-slate-300 font-semibold">TypeScript</span>
+          </div>
+          <button class="copy-btn flex items-center gap-1.5 px-2.5 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition" data-lang="typescript">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+            Copy
+          </button>
+        </div>
+        <div class="shiki-wrapper overflow-x-auto overflow-y-auto max-h-[600px] text-[13px] leading-relaxed" set:html={tsHtml} />
       </div>
-      <pre id="ts-code" class="bg-slate-950 rounded-xl border border-slate-700 p-5 text-xs font-mono text-slate-300 overflow-x-auto overflow-y-auto max-h-[600px] leading-relaxed whitespace-pre">{tsCode}</pre>
     </div>
 
     <!-- Go -->
     <div id="code-go" class="lang-panel hidden">
-      <div class="flex items-center justify-between mb-3">
-        <span class="text-sm text-slate-400">~180 lines · idiomatic structs, methods, map for KV state machine</span>
-        <button class="copy-btn px-3 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition" data-target="go-code">Copy</button>
+      <p class="text-sm text-slate-400 mb-3">~180 lines · idiomatic structs, methods, map for KV state machine</p>
+      <div class="code-block rounded-xl overflow-hidden border border-slate-700">
+        <div class="code-header flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#00ADD8]"></span>
+            <span class="text-xs font-mono text-slate-300 font-semibold">Go</span>
+          </div>
+          <button class="copy-btn flex items-center gap-1.5 px-2.5 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition" data-lang="go">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+            Copy
+          </button>
+        </div>
+        <div class="shiki-wrapper overflow-x-auto overflow-y-auto max-h-[600px] text-[13px] leading-relaxed" set:html={goHtml} />
       </div>
-      <pre id="go-code" class="bg-slate-950 rounded-xl border border-slate-700 p-5 text-xs font-mono text-slate-300 overflow-x-auto overflow-y-auto max-h-[600px] leading-relaxed whitespace-pre">{goCode}</pre>
     </div>
 
     <!-- Rust -->
     <div id="code-rust" class="lang-panel hidden">
-      <div class="flex items-center justify-between mb-3">
-        <span class="text-sm text-slate-400">~220 lines · ownership makes state persistence explicit, Option for nullable fields</span>
-        <button class="copy-btn px-3 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition" data-target="rust-code">Copy</button>
+      <p class="text-sm text-slate-400 mb-3">~220 lines · ownership makes state persistence explicit, Option for nullable fields</p>
+      <div class="code-block rounded-xl overflow-hidden border border-slate-700">
+        <div class="code-header flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#DEA584]"></span>
+            <span class="text-xs font-mono text-slate-300 font-semibold">Rust</span>
+          </div>
+          <button class="copy-btn flex items-center gap-1.5 px-2.5 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition" data-lang="rust">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+            Copy
+          </button>
+        </div>
+        <div class="shiki-wrapper overflow-x-auto overflow-y-auto max-h-[600px] text-[13px] leading-relaxed" set:html={rustHtml} />
       </div>
-      <pre id="rust-code" class="bg-slate-950 rounded-xl border border-slate-700 p-5 text-xs font-mono text-slate-300 overflow-x-auto overflow-y-auto max-h-[600px] leading-relaxed whitespace-pre">{rustCode}</pre>
     </div>
   </section>
 

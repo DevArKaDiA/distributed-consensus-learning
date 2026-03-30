@@ -169,6 +169,29 @@ const tv = t.visualizer;
     </div>
   </section>
 
+  <!-- KV Store Terminal -->
+  <section class="max-w-6xl mx-auto px-4 pb-12">
+    <div class="bg-black border border-slate-700 rounded-xl overflow-hidden font-mono" id="kv-terminal">
+      <!-- Terminal header -->
+      <div class="flex items-center gap-2 px-4 py-2.5 bg-slate-900 border-b border-slate-700">
+        <span class="w-3 h-3 rounded-full bg-red-500 opacity-70"></span>
+        <span class="w-3 h-3 rounded-full bg-amber-500 opacity-70"></span>
+        <span class="w-3 h-3 rounded-full bg-green-500 opacity-70"></span>
+        <span class="text-slate-400 text-xs ml-3">distributed-kv — connected to cluster</span>
+        <span class="ml-auto text-slate-600 text-xs">type <span class="text-slate-400">help</span> for commands</span>
+      </div>
+      <!-- Output area -->
+      <div id="kv-output" class="h-56 overflow-y-auto px-4 py-3 space-y-0.5 text-sm leading-5" style="scrollbar-color:#334155 #000"></div>
+      <!-- Input line -->
+      <div class="flex items-center gap-2 px-4 py-2.5 border-t border-slate-800">
+        <span class="text-green-400 select-none">$</span>
+        <input id="kv-input" type="text" autocomplete="off" spellcheck="false"
+          class="flex-1 bg-transparent text-green-300 text-sm outline-none placeholder-slate-600 caret-green-400"
+          placeholder="set key value  |  get key  |  del key  |  keys  |  state  |  help" />
+      </div>
+    </div>
+  </section>
+
 </Base>
 
 <script>
@@ -925,5 +948,231 @@ const tv = t.visualizer;
     const pct = (e.clientX - rect.left) / rect.width;
     const idx = Math.min(events.length - 1, Math.floor(pct * events.length));
     if (idx >= 0) jumpTo(idx);
+  });
+
+  // ─── KV Terminal ──────────────────────────────────────────────────────────────
+
+  const kvStore = new Map<string, string>();
+  const kvOutput = document.getElementById('kv-output')!;
+  const kvInput = document.getElementById('kv-input') as HTMLInputElement;
+  const kvTerminal = document.getElementById('kv-terminal')!;
+  const MAX_SCROLLBACK = 50;
+
+  function kvPrint(line: string, cls = 'text-slate-300') {
+    const div = document.createElement('div');
+    div.className = `font-mono text-sm whitespace-pre ${cls}`;
+    div.textContent = line;
+    kvOutput.appendChild(div);
+    // Trim scrollback
+    while (kvOutput.children.length > MAX_SCROLLBACK) {
+      kvOutput.removeChild(kvOutput.firstChild!);
+    }
+    kvOutput.scrollTop = kvOutput.scrollHeight;
+  }
+
+  function kvCurrentLeader(): { id: number; nodeCount: number } | null {
+    if (cursor < 0 || cursor >= events.length) return null;
+    const state = events[cursor].state;
+    const leader = state.nodes.find(n => n.state === 'leader');
+    if (!leader) return null;
+    return { id: leader.id, nodeCount: state.nodes.length };
+  }
+
+  function kvAnimateClientPacket(leaderId: number) {
+    // Animate a dashed line packet from a virtual "client" point (outside circle) to the leader
+    if (cursor < 0 || cursor >= events.length) return;
+    const state = events[cursor].state;
+    const positions = nodePositions(state.nodes.length);
+    const leaderPos = positions[leaderId - 1];
+    if (!leaderPos) return;
+
+    // Client origin: slightly outside the SVG bottom-left corner area
+    const clientX = 40;
+    const clientY = SVG_H - 30;
+
+    // Dashed line from client to leader
+    const dashLine = svgMake('line', {
+      x1: clientX, y1: clientY, x2: leaderPos.x, y2: leaderPos.y,
+      stroke: '#a855f7',
+      'stroke-width': 1.5,
+      'stroke-dasharray': '6 4',
+      opacity: 0.7,
+    });
+    packetsG.appendChild(dashLine);
+
+    // Packet circle
+    const pkt = svgMake('circle', {
+      cx: clientX, cy: clientY, r: 7,
+      fill: '#a855f7', opacity: 0.95,
+    });
+    const pktLabel = svgMake('text', {
+      x: clientX, y: clientY - 12,
+      'text-anchor': 'middle',
+      fill: '#fff',
+      'font-size': 8,
+      'font-family': 'JetBrains Mono, monospace',
+      'font-weight': 'bold',
+      'pointer-events': 'none',
+    });
+    pktLabel.textContent = 'KV';
+    packetsG.appendChild(pkt);
+    packetsG.appendChild(pktLabel);
+
+    const dur = Math.round(600 / speedMultiplier);
+    waapi.animate(pkt, {
+      cx: leaderPos.x, cy: leaderPos.y,
+      duration: dur,
+      ease: 'inOut(2)',
+      onComplete: () => {
+        pkt.remove();
+        pktLabel.remove();
+        dashLine.remove();
+      },
+    });
+    waapi.animate(pktLabel, {
+      x: leaderPos.x, y: leaderPos.y - 12,
+      opacity: [1, 0],
+      duration: dur,
+      ease: 'inOut(2)',
+    });
+
+    flashNode(leaderId);
+  }
+
+  async function kvExecWrite(op: 'SET' | 'DEL', key: string, value?: string): Promise<void> {
+    const leader = kvCurrentLeader();
+    if (!leader) {
+      kvPrint('  ✗ no leader — cluster unavailable', 'text-red-400');
+      return;
+    }
+
+    const cmd = op === 'SET' ? `${key}=${value}` : `DEL ${key}`;
+    kvPrint(`  → leader N${leader.id} received ${op} ${cmd}`, 'text-sky-300');
+    kvAnimateClientPacket(leader.id);
+
+    // Simulate replication delay
+    await new Promise(r => setTimeout(r, 180));
+
+    const state = events[cursor < 0 ? 0 : cursor].state;
+    const followers = state.nodes.filter(n => n.state === 'follower').map(n => n.id);
+    const majority = Math.floor(leader.nodeCount / 2) + 1;
+
+    if (followers.length > 0) {
+      kvPrint(`  → replicating to ${followers.map(id => `N${id}`).join(', ')}...`, 'text-sky-300');
+      await new Promise(r => setTimeout(r, 220));
+      kvPrint(`  → majority ACK (${majority}/${leader.nodeCount})`, 'text-sky-300');
+      await new Promise(r => setTimeout(r, 100));
+    }
+
+    if (op === 'SET') {
+      kvStore.set(key, value!);
+      kvPrint(`  ✓ committed: ${key} = ${value}`, 'text-green-400');
+    } else {
+      if (kvStore.has(key)) {
+        kvStore.delete(key);
+        kvPrint(`  ✓ committed: deleted ${key}`, 'text-green-400');
+      } else {
+        kvPrint(`  ✗ key not found: ${key}`, 'text-amber-400');
+      }
+    }
+  }
+
+  async function kvHandleCommand(raw: string) {
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+
+    // Echo input
+    kvPrint(`$ ${trimmed}`, 'text-green-300');
+
+    const parts = trimmed.split(/\s+/);
+    const cmd = parts[0].toLowerCase();
+
+    if (cmd === 'clear') {
+      kvOutput.innerHTML = '';
+      return;
+    }
+
+    if (cmd === 'help') {
+      kvPrint('  Commands:', 'text-slate-400');
+      kvPrint('    set <key> <value>   — write a key', 'text-slate-400');
+      kvPrint('    get <key>           — read a key from leader', 'text-slate-400');
+      kvPrint('    del <key>           — delete a key', 'text-slate-400');
+      kvPrint('    keys                — list all committed keys', 'text-slate-400');
+      kvPrint('    state               — show cluster state', 'text-slate-400');
+      kvPrint('    clear               — clear terminal', 'text-slate-400');
+      kvPrint('    help                — this message', 'text-slate-400');
+      return;
+    }
+
+    if (cmd === 'keys') {
+      if (kvStore.size === 0) {
+        kvPrint('  (empty store)', 'text-slate-500');
+      } else {
+        for (const [k, v] of kvStore) {
+          kvPrint(`  ${k} = ${v}`, 'text-slate-300');
+        }
+      }
+      return;
+    }
+
+    if (cmd === 'state') {
+      if (cursor < 0 || cursor >= events.length) {
+        kvPrint('  (simulation not started)', 'text-slate-500');
+        return;
+      }
+      const state = events[cursor].state;
+      kvPrint(`  cluster term: ${state.term}`, 'text-slate-300');
+      for (const n of state.nodes) {
+        const role = n.state === 'leader' ? ' [LEADER]' : n.state === 'dead' ? ' [DEAD]' : '';
+        kvPrint(`  N${n.id}: ${n.state}${role}  term=${n.term}  log=${n.log.length}  commit=${n.commitIndex}`, 'text-slate-300');
+      }
+      return;
+    }
+
+    if (cmd === 'get') {
+      const key = parts[1];
+      if (!key) { kvPrint('  usage: get <key>', 'text-amber-400'); return; }
+      const leader = kvCurrentLeader();
+      if (!leader) { kvPrint('  ✗ no leader — cluster unavailable', 'text-red-400'); return; }
+      kvPrint(`  → reading from leader N${leader.id}`, 'text-sky-300');
+      if (kvStore.has(key)) {
+        kvPrint(`  ${key} = ${kvStore.get(key)}`, 'text-green-300');
+      } else {
+        kvPrint(`  ✗ key not found: ${key}`, 'text-amber-400');
+      }
+      return;
+    }
+
+    if (cmd === 'set') {
+      const key = parts[1];
+      const value = parts.slice(2).join(' ');
+      if (!key || !value) { kvPrint('  usage: set <key> <value>', 'text-amber-400'); return; }
+      await kvExecWrite('SET', key, value);
+      return;
+    }
+
+    if (cmd === 'del') {
+      const key = parts[1];
+      if (!key) { kvPrint('  usage: del <key>', 'text-amber-400'); return; }
+      await kvExecWrite('DEL', key);
+      return;
+    }
+
+    kvPrint(`  ✗ unknown command: ${cmd}  (type help)`, 'text-red-400');
+  }
+
+  // Startup message
+  kvPrint('  distributed-kv v1.0  —  Raft-backed key/value store', 'text-slate-500');
+  kvPrint('  type help for available commands', 'text-slate-500');
+
+  // Focus input on terminal click
+  kvTerminal.addEventListener('click', () => kvInput.focus());
+
+  // Handle Enter
+  kvInput.addEventListener('keydown', async (e: KeyboardEvent) => {
+    if (e.key !== 'Enter') return;
+    const val = kvInput.value;
+    kvInput.value = '';
+    await kvHandleCommand(val);
   });
 </script>
