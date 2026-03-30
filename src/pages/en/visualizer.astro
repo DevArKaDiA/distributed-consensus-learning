@@ -121,8 +121,8 @@ const tv = t.visualizer;
             <g id="viz-packets"></g>
             <!-- Tooltip -->
             <g id="viz-tooltip" style="display:none; pointer-events:none">
-              <rect id="viz-tooltip-bg" rx="4" ry="4" fill="#0f172a" stroke="#334155" stroke-width="1"/>
-              <text id="viz-tooltip-text" fill="#cbd5e1" font-size="10" font-family="JetBrains Mono, monospace"></text>
+              <rect id="viz-tooltip-bg" rx="6" ry="6" fill="#0f172a" stroke="#334155" stroke-width="1.5"/>
+              <text id="viz-tooltip-text" fill="#cbd5e1" font-size="11" font-family="JetBrains Mono, monospace" text-anchor="middle"></text>
             </g>
           </svg>
 
@@ -471,12 +471,11 @@ const tv = t.visualizer;
         const line1 = svgMake('tspan', {
           x: pos.x, dy: 0,
           fill: stateColor, 'font-weight': 'bold',
-          'font-size': 11,
         });
         line1.textContent = `N${node.id} · ${node.state}`;
 
         const line2 = svgMake('tspan', {
-          x: pos.x, dy: 16,
+          x: pos.x, dy: 17,
           fill: '#94a3b8',
         });
         line2.textContent = `term ${node.term}`;
@@ -484,15 +483,24 @@ const tv = t.visualizer;
         tooltipText.appendChild(line1);
         tooltipText.appendChild(line2);
 
-        const tipX = pos.x;
-        const tipY = pos.y - NODE_R - 42;
-        tooltipText.setAttribute('x', String(tipX));
-        tooltipText.setAttribute('y', String(tipY + 4));
+        const PAD_X = 12, PAD_Y = 8, LINE_H = 17;
+        const textW = Math.max(
+          `N${node.id} · ${node.state}`.length,
+          `term ${node.term}`.length
+        ) * 7; // ~7px per char at 11px monospace
+        const tipW = textW + PAD_X * 2;
+        const tipH = LINE_H + 11 + PAD_Y * 2;
 
-        tooltipBg.setAttribute('x', String(tipX - 44));
-        tooltipBg.setAttribute('y', String(tipY - 2));
-        tooltipBg.setAttribute('width', '88');
-        tooltipBg.setAttribute('height', '34');
+        const tipX = pos.x;
+        const tipY = pos.y - NODE_R - tipH - 6;
+
+        tooltipText.setAttribute('x', String(tipX));
+        tooltipText.setAttribute('y', String(tipY + PAD_Y + 11));
+
+        tooltipBg.setAttribute('x', String(tipX - tipW / 2));
+        tooltipBg.setAttribute('y', String(tipY));
+        tooltipBg.setAttribute('width', String(tipW));
+        tooltipBg.setAttribute('height', String(tipH));
 
         tooltipG.style.display = '';
       });
