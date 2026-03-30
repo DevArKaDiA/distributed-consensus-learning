@@ -17,44 +17,14 @@ const tv = t.visualizer;
   <section class="max-w-6xl mx-auto px-4 pb-4">
     <div class="bg-slate-900 border border-slate-700 rounded-xl p-3 flex flex-wrap items-center gap-3">
 
-      <!-- Playback buttons -->
+      <!-- Sim Speed -->
       <div class="flex items-center gap-2">
-        <button id="btn-step-back" class="px-3 py-1.5 text-xs font-mono bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg border border-slate-600 transition disabled:opacity-40" disabled>
-          {tv.step_back}
-        </button>
-        <button id="btn-play" class="px-4 py-1.5 text-xs font-mono bg-sky-700 hover:bg-sky-600 text-white rounded-lg border border-sky-600 transition">
-          {tv.play}
-        </button>
-        <button id="btn-step-fwd" class="px-3 py-1.5 text-xs font-mono bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg border border-slate-600 transition">
-          {tv.step_fwd}
-        </button>
-      </div>
-
-      <!-- Divider -->
-      <div class="w-px h-6 bg-slate-700 hidden sm:block"></div>
-
-      <!-- Speed -->
-      <div class="flex items-center gap-2">
-        <span class="text-slate-400 text-xs font-mono">{tv.speed}</span>
+        <span class="text-slate-400 text-xs font-mono">Sim Speed</span>
         <select id="sel-speed" class="bg-slate-800 border border-slate-600 text-slate-300 text-xs font-mono rounded-lg px-2 py-1">
           <option value="0.25">0.25×</option>
-          <option value="0.5">0.5×</option>
-          <option value="1" selected>1×</option>
+          <option value="0.5" selected>0.5×</option>
+          <option value="1">1×</option>
           <option value="2">2×</option>
-        </select>
-      </div>
-
-      <!-- Divider -->
-      <div class="w-px h-6 bg-slate-700 hidden sm:block"></div>
-
-      <!-- Scenario -->
-      <div class="flex items-center gap-2">
-        <span class="text-slate-400 text-xs font-mono">{tv.scenario_label}</span>
-        <select id="sel-scenario" class="bg-slate-800 border border-slate-600 text-slate-300 text-xs font-mono rounded-lg px-2 py-1">
-          <option value="normal">{tv.scenarios.normal}</option>
-          <option value="leader_crash">{tv.scenarios.leader_crash}</option>
-          <option value="partition">{tv.scenarios.partition}</option>
-          <option value="split_vote">{tv.scenarios.split_vote}</option>
         </select>
       </div>
 
@@ -72,10 +42,11 @@ const tv = t.visualizer;
       <!-- Divider -->
       <div class="w-px h-6 bg-slate-700 hidden sm:block"></div>
 
-      <!-- Loop toggle -->
-      <button id="btn-loop" class="px-3 py-1.5 text-xs font-mono bg-slate-700 hover:bg-slate-600 text-slate-400 rounded-lg border border-slate-600 transition">
-        Loop: Off
-      </button>
+      <!-- Sim status badge -->
+      <div class="flex items-center gap-2">
+        <span id="sim-status-dot" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block"></span>
+        <span id="sim-status-text" class="text-emerald-400 text-xs font-mono">Live</span>
+      </div>
 
       <!-- Reset -->
       <div class="ml-auto">
@@ -83,20 +54,6 @@ const tv = t.visualizer;
           {tv.reset}
         </button>
       </div>
-    </div>
-
-    <!-- Progress bar -->
-    <div class="mt-2 relative">
-      <div id="progress-track" class="h-3 bg-slate-800 rounded-full overflow-hidden cursor-pointer relative">
-        <div id="progress-bar" class="h-full bg-sky-500 transition-none" style="width:0%"></div>
-        <!-- tick marks rendered by JS -->
-        <div id="progress-ticks" class="absolute inset-0 pointer-events-none"></div>
-      </div>
-    </div>
-    <div class="mt-1 flex justify-between text-xs font-mono text-slate-600">
-      <span id="progress-label">0 / 0</span>
-      <span id="loop-indicator" class="text-amber-400 hidden">Looping...</span>
-      <span id="time-label">t=0ms</span>
     </div>
   </section>
 
@@ -222,8 +179,6 @@ const tv = t.visualizer;
 </Base>
 
 <script>
-  import { generateScenario } from '../../scripts/raft-sim';
-  import type { SimEvent, NodeState, ScenarioName } from '../../scripts/raft-sim';
   import { waapi } from 'animejs';
 
   // ─── Constants ────────────────────────────────────────────────────────────────
@@ -241,7 +196,6 @@ const tv = t.visualizer;
     dead:      '#37415108',
   };
 
-  // Packet label + color by event type
   const PACKET_LABEL: Record<string, string> = {
     request_vote:    'RV',
     vote_granted:    '✓',
@@ -251,22 +205,24 @@ const tv = t.visualizer;
     append_ack:      '✓',
   };
   const PACKET_COLOR: Record<string, string> = {
-    request_vote:    '#10b981',  // green — vote request
-    vote_granted:    '#06b6d4',  // teal — vote grant
-    vote_denied:     '#ef4444',  // red
-    heartbeat:       '#f59e0b',  // amber — heartbeat
-    append_entries:  '#f59e0b',  // amber — AE
-    append_ack:      '#38bdf8',  // blue — ack
+    request_vote:    '#10b981',
+    vote_granted:    '#06b6d4',
+    vote_denied:     '#ef4444',
+    heartbeat:       '#f59e0b',
+    append_entries:  '#f59e0b',
+    append_ack:      '#38bdf8',
   };
 
   const NODE_R = 30;
-  const TIMER_R = NODE_R + 12; // radius of election timer ring
+  const TIMER_R = NODE_R + 12;
   const SVG_W = 800;
   const SVG_H = 460;
-  const LANG = 'en';
 
-  // Election timeout in ms (simulated)
-  const ELECTION_TIMEOUT_MS = 2500;
+  // Election timeout range in ms (real wall-clock time, before speed divisor)
+  const ET_MIN = 1500;
+  const ET_MAX = 3000;
+  // Heartbeat interval in ms (before speed divisor)
+  const HB_INTERVAL = 600;
 
   const EVENT_LABELS: Record<string, string> = {
     election_timeout: 'election timeout',
@@ -281,6 +237,7 @@ const tv = t.visualizer;
     entry_committed: 'entry committed',
     leader_crash: 'leader crash',
     node_recover: 'node recover',
+    split_vote: 'split vote',
   };
 
   const EVENT_COLORS: Record<string, string> = {
@@ -296,25 +253,49 @@ const tv = t.visualizer;
     entry_committed: 'text-green-300 bg-green-900/30 border-green-700/40',
     leader_crash: 'text-red-300 bg-red-900/30 border-red-700/40',
     node_recover: 'text-indigo-300 bg-indigo-900/30 border-indigo-700/40',
+    split_vote: 'text-amber-300 bg-amber-900/30 border-amber-700/40',
   };
 
-  // ─── State ────────────────────────────────────────────────────────────────────
+  // ─── Live cluster types ────────────────────────────────────────────────────────
 
-  let events: SimEvent[] = [];
-  let cursor = -1;
-  let playing = false;
-  let playTimer: ReturnType<typeof setTimeout> | null = null;
-  let speedMultiplier = 1;
+  interface LogEntry {
+    term: number;
+    command: string;
+    committed: boolean;
+  }
+
+  interface LiveNode {
+    id: number;
+    state: 'follower' | 'candidate' | 'leader' | 'dead';
+    term: number;
+    votedFor: number | null;
+    log: LogEntry[];
+    commitIndex: number;
+    electionTimer: ReturnType<typeof setTimeout> | null;
+    electionTimeout: number; // ms before speed divisor
+    votesReceived: number;
+  }
+
+  interface LiveCluster {
+    nodes: LiveNode[];
+    term: number;
+  }
+
+  // ─── Simulation state ─────────────────────────────────────────────────────────
+
+  let liveCluster: LiveCluster = { nodes: [], term: 0 };
+  let speedMultiplier = 0.5;
   let selectedNode: number | null = null;
   let nodeCount = 5;
-  let looping = false;
-  let loopPauseTimer: ReturnType<typeof setTimeout> | null = null;
-
-  // Election timer animation state: maps nodeId → animation controller
-  const timerAnimations: Map<number, ReturnType<typeof waapi.animate>> = new Map();
+  let simRunning = false;
+  let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  let logCounter = 0;
 
   // Admin shell: isolated node IDs (partition)
   const isolatedNodes = new Set<number>();
+
+  // Election timer animation state: maps nodeId → animation controller
+  const timerAnimations: Map<number, ReturnType<typeof waapi.animate>> = new Map();
 
   // ─── DOM refs ─────────────────────────────────────────────────────────────────
 
@@ -330,18 +311,15 @@ const tv = t.visualizer;
   const CLIENT_COLOR = '#a855f7';
 
   (() => {
-    // Outer ring
     const ring = svgMake('circle', {
       cx: CLIENT_X, cy: CLIENT_Y, r: 22,
       fill: '#a855f708', stroke: CLIENT_COLOR,
       'stroke-width': 1.5, 'stroke-dasharray': '4 3', opacity: 0.7,
     });
-    // Inner filled circle
     const dot = svgMake('circle', {
       cx: CLIENT_X, cy: CLIENT_Y, r: 14,
       fill: '#581c87', stroke: CLIENT_COLOR, 'stroke-width': 1.5,
     });
-    // Label inside
     const lbl = svgMake('text', {
       x: CLIENT_X, y: CLIENT_Y + 1,
       'text-anchor': 'middle', 'dominant-baseline': 'middle',
@@ -352,6 +330,7 @@ const tv = t.visualizer;
     lbl.textContent = 'client';
     clientG.append(ring, dot, lbl);
   })();
+
   const tooltipG = document.getElementById('viz-tooltip') as SVGGElement;
   const tooltipBg = document.getElementById('viz-tooltip-bg') as SVGRectElement;
   const tooltipText = document.getElementById('viz-tooltip-text') as SVGTextElement;
@@ -360,22 +339,13 @@ const tv = t.visualizer;
   const narrationType = document.getElementById('narration-type')!;
   const nodeDetail = document.getElementById('node-detail')!;
   const eventLog = document.getElementById('event-log')!;
-  const progressBar = document.getElementById('progress-bar')!;
-  const progressTrack = document.getElementById('progress-track')!;
-  const progressTicks = document.getElementById('progress-ticks')!;
-  const progressLabel = document.getElementById('progress-label')!;
-  const timeLabel = document.getElementById('time-label')!;
-  const loopIndicator = document.getElementById('loop-indicator')!;
-  const btnPlay = document.getElementById('btn-play')!;
-  const btnStepBack = document.getElementById('btn-step-back') as HTMLButtonElement;
-  const btnStepFwd = document.getElementById('btn-step-fwd')!;
   const btnReset = document.getElementById('btn-reset')!;
-  const btnLoop = document.getElementById('btn-loop')!;
   const btnAddNode = document.getElementById('btn-add-node')!;
   const btnRemoveNode = document.getElementById('btn-remove-node')!;
   const nodeCountLabel = document.getElementById('node-count-label')!;
   const selSpeed = document.getElementById('sel-speed') as HTMLSelectElement;
-  const selScenario = document.getElementById('sel-scenario') as HTMLSelectElement;
+  const simStatusDot = document.getElementById('sim-status-dot')!;
+  const simStatusText = document.getElementById('sim-status-text')!;
 
   // ─── SVG helpers ──────────────────────────────────────────────────────────────
 
@@ -399,18 +369,13 @@ const tv = t.visualizer;
 
   const timerCircumference = 2 * Math.PI * TIMER_R;
 
-  function startTimerArc(nodeId: number, pos: { x: number; y: number }) {
-    // Remove old
+  function startTimerArc(nodeId: number, timeoutMs: number) {
     stopTimerArc(nodeId);
-
     const arc = document.getElementById(`vtimer-${nodeId}`) as SVGCircleElement | null;
     if (!arc) return;
-
-    // Reset to full
     arc.style.strokeDashoffset = '0';
     arc.style.opacity = '1';
-
-    const durationMs = Math.round(ELECTION_TIMEOUT_MS / speedMultiplier);
+    const durationMs = Math.round(timeoutMs / speedMultiplier);
     const anim = waapi.animate(arc, {
       strokeDashoffset: [0, timerCircumference],
       duration: durationMs,
@@ -433,20 +398,14 @@ const tv = t.visualizer;
     }
   }
 
-  function updateTimerArcs(state: ReturnType<typeof generateScenario>[number]['state']) {
-    for (const node of state.nodes) {
-      if (node.state === 'follower') {
-        const pos = nodePositions(state.nodes.length)[node.id - 1];
-        if (pos) startTimerArc(node.id, pos);
-      } else {
-        stopTimerArc(node.id);
-      }
-    }
-  }
-
   // ─── Rendering ────────────────────────────────────────────────────────────────
 
-  function renderCluster(state: ReturnType<typeof generateScenario>[number]['state']) {
+  function getLiveState() {
+    return { nodes: liveCluster.nodes, term: liveCluster.term };
+  }
+
+  function renderCluster() {
+    const state = getLiveState();
     const positions = nodePositions(state.nodes.length);
 
     // Edges
@@ -467,24 +426,17 @@ const tv = t.visualizer;
     nodesG.innerHTML = '';
     state.nodes.forEach((node, i) => {
       const pos = positions[i];
-      const g = svgMake('g', {
-        id: `vnode-${node.id}`,
-        style: 'cursor:pointer',
-      });
+      const g = svgMake('g', { id: `vnode-${node.id}`, style: 'cursor:pointer' });
 
-      // Election timer arc (follower only)
+      // Election timer arc
       const timerArc = svgMake('circle', {
         cx: pos.x, cy: pos.y, r: TIMER_R,
-        fill: 'none',
-        stroke: '#6366f1',
-        'stroke-width': 3,
+        fill: 'none', stroke: '#6366f1', 'stroke-width': 3,
         'stroke-dasharray': timerCircumference,
-        'stroke-dashoffset': 0,
-        'stroke-linecap': 'round',
-        opacity: node.state === 'follower' ? 1 : 0,
+        'stroke-dashoffset': 0, 'stroke-linecap': 'round',
+        opacity: node.state === 'follower' || node.state === 'candidate' ? 1 : 0,
         transform: `rotate(-90, ${pos.x}, ${pos.y})`,
-        id: `vtimer-${node.id}`,
-        style: 'pointer-events:none',
+        id: `vtimer-${node.id}`, style: 'pointer-events:none',
       });
 
       // Glow ring (leader only)
@@ -494,8 +446,7 @@ const tv = t.visualizer;
         stroke: node.state === 'leader' ? COLOR.leader : 'transparent',
         'stroke-width': 2,
         opacity: node.state === 'leader' ? 0.5 : 0,
-        id: `vglow-${node.id}`,
-        style: 'pointer-events:none',
+        id: `vglow-${node.id}`, style: 'pointer-events:none',
       });
 
       const circle = svgMake('circle', {
@@ -508,18 +459,15 @@ const tv = t.visualizer;
 
       const labelId = svgMake('text', {
         x: pos.x, y: pos.y - 6,
-        'text-anchor': 'middle',
-        fill: COLOR[node.state] ?? COLOR.dead,
+        'text-anchor': 'middle', fill: COLOR[node.state] ?? COLOR.dead,
         'font-size': 12, 'font-family': 'JetBrains Mono, monospace',
-        'font-weight': 'bold',
-        style: 'pointer-events:none',
+        'font-weight': 'bold', style: 'pointer-events:none',
       });
       labelId.textContent = `N${node.id}`;
 
       const labelState = svgMake('text', {
         x: pos.x, y: pos.y + 10,
-        'text-anchor': 'middle',
-        fill: '#64748b',
+        'text-anchor': 'middle', fill: '#64748b',
         'font-size': 9, 'font-family': 'JetBrains Mono, monospace',
         style: 'pointer-events:none',
       });
@@ -527,8 +475,7 @@ const tv = t.visualizer;
 
       const labelTerm = svgMake('text', {
         x: pos.x, y: pos.y + 22,
-        'text-anchor': 'middle',
-        fill: '#475569',
+        'text-anchor': 'middle', fill: '#475569',
         'font-size': 8, 'font-family': 'JetBrains Mono, monospace',
         style: 'pointer-events:none',
       });
@@ -543,26 +490,17 @@ const tv = t.visualizer;
       nodesG.appendChild(g);
 
       // Hover tooltip
-      g.addEventListener('mouseenter', (e) => {
+      g.addEventListener('mouseenter', () => {
         const stateColor =
           node.state === 'leader' ? '#f59e0b' :
           node.state === 'candidate' ? '#10b981' :
           node.state === 'dead' ? '#6b7280' : '#6366f1';
 
         tooltipText.innerHTML = '';
-
-        const line1 = svgMake('tspan', {
-          x: pos.x, dy: 0,
-          fill: stateColor, 'font-weight': 'bold',
-        });
+        const line1 = svgMake('tspan', { x: pos.x, dy: 0, fill: stateColor, 'font-weight': 'bold' });
         line1.textContent = `N${node.id} · ${node.state}`;
-
-        const line2 = svgMake('tspan', {
-          x: pos.x, dy: 17,
-          fill: '#94a3b8',
-        });
+        const line2 = svgMake('tspan', { x: pos.x, dy: 17, fill: '#94a3b8' });
         line2.textContent = `term ${node.term}`;
-
         tooltipText.appendChild(line1);
         tooltipText.appendChild(line2);
 
@@ -570,74 +508,65 @@ const tv = t.visualizer;
         const textW = Math.max(
           `N${node.id} · ${node.state}`.length,
           `term ${node.term}`.length
-        ) * 7; // ~7px per char at 11px monospace
+        ) * 7;
         const tipW = textW + PAD_X * 2;
         const tipH = LINE_H + 11 + PAD_Y * 2;
-
         const tipX = Math.min(Math.max(pos.x, tipW / 2 + 4), SVG_W - tipW / 2 - 4);
         const above = pos.y - NODE_R - tipH - 6;
         const tipY = above >= 4 ? above : pos.y + NODE_R + 6;
 
         tooltipText.setAttribute('x', String(tipX));
         tooltipText.setAttribute('y', String(tipY + PAD_Y + 11));
-
         tooltipBg.setAttribute('x', String(tipX - tipW / 2));
         tooltipBg.setAttribute('y', String(tipY));
         tooltipBg.setAttribute('width', String(tipW));
         tooltipBg.setAttribute('height', String(tipH));
-
         tooltipG.style.display = '';
       });
 
-      g.addEventListener('mouseleave', () => {
-        tooltipG.style.display = 'none';
-      });
+      g.addEventListener('mouseleave', () => { tooltipG.style.display = 'none'; });
 
-      // Click: show detail panel
       g.addEventListener('click', () => {
         selectedNode = selectedNode === node.id ? null : node.id;
-        renderCluster(state);
+        renderCluster();
         renderNodeDetail(node);
       });
 
-      // Animate glow for leader
       if (node.state === 'leader') {
         waapi.animate(glowR, {
           opacity: [0.5, 0.15, 0.5],
           r: [NODE_R + 10, NODE_R + 16, NODE_R + 10],
-          duration: 1800,
-          loop: true,
-          ease: 'inOut(2)',
+          duration: 1800, loop: true, ease: 'inOut(2)',
         });
       }
     });
 
-    // Restart timer arcs for current state
-    updateTimerArcs(state);
-
-    // Draw partition rings for isolated nodes
+    // Re-sync timer arc visibility for followers/candidates
     for (const node of state.nodes) {
-      const nodeEl = document.getElementById(`vnode-${node.id}`);
-      if (!nodeEl) continue;
-      // Remove any old partition ring
+      if (node.state === 'follower' || node.state === 'candidate') {
+        if (!timerAnimations.has(node.id)) {
+          startTimerArc(node.id, node.electionTimeout);
+        }
+      } else {
+        stopTimerArc(node.id);
+      }
+    }
+
+    // Partition rings
+    for (const node of state.nodes) {
       const oldRing = document.getElementById(`vpartition-${node.id}`);
       if (oldRing) oldRing.remove();
       if (isolatedNodes.has(node.id)) {
         const pos = positions[node.id - 1];
         if (!pos) continue;
         const ring = svgMake('circle', {
-          cx: pos.x, cy: pos.y,
-          r: NODE_R + 18,
-          fill: 'none',
-          stroke: '#ef4444',
-          'stroke-width': 2,
-          'stroke-dasharray': '6 4',
-          opacity: 0.8,
-          id: `vpartition-${node.id}`,
+          cx: pos.x, cy: pos.y, r: NODE_R + 18,
+          fill: 'none', stroke: '#ef4444',
+          'stroke-width': 2, 'stroke-dasharray': '6 4',
+          opacity: 0.8, id: `vpartition-${node.id}`,
           style: 'pointer-events:none',
         });
         nodesG.appendChild(ring);
-        // Dim the node visually by overlaying a semi-transparent gray
         const dimCircle = document.getElementById(`vcircle-${node.id}`);
         if (dimCircle) dimCircle.setAttribute('opacity', '0.35');
       } else {
@@ -647,38 +576,23 @@ const tv = t.visualizer;
     }
   }
 
-  function animatePacket(fromId: number, toId: number, color: string, label: string, state: ReturnType<typeof generateScenario>[number]['state']) {
-    const positions = nodePositions(state.nodes.length);
+  // ─── Packet animations ────────────────────────────────────────────────────────
+
+  function animatePacket(fromId: number, toId: number, color: string, label: string) {
+    const positions = nodePositions(liveCluster.nodes.length);
     const from = positions[fromId - 1];
     const to = positions[toId - 1];
     if (!from || !to) return;
 
     const duration = Math.round(500 / speedMultiplier);
 
-    // Main packet circle
-    const packet = svgMake('circle', {
-      cx: from.x, cy: from.y, r: 7,
-      fill: color, opacity: 0.95,
-    });
-
-    // Trail circles for fade effect
-    const trail1 = svgMake('circle', {
-      cx: from.x, cy: from.y, r: 5,
-      fill: color, opacity: 0.5,
-    });
-    const trail2 = svgMake('circle', {
-      cx: from.x, cy: from.y, r: 3,
-      fill: color, opacity: 0.2,
-    });
-
-    // Label text
+    const packet = svgMake('circle', { cx: from.x, cy: from.y, r: 7, fill: color, opacity: 0.95 });
+    const trail1 = svgMake('circle', { cx: from.x, cy: from.y, r: 5, fill: color, opacity: 0.5 });
+    const trail2 = svgMake('circle', { cx: from.x, cy: from.y, r: 3, fill: color, opacity: 0.2 });
     const pLabel = svgMake('text', {
       x: from.x, y: from.y - 12,
-      'text-anchor': 'middle',
-      fill: '#fff',
-      'font-size': 8,
-      'font-family': 'JetBrains Mono, monospace',
-      'font-weight': 'bold',
+      'text-anchor': 'middle', fill: '#fff', 'font-size': 8,
+      'font-family': 'JetBrains Mono, monospace', 'font-weight': 'bold',
       'pointer-events': 'none',
     });
     pLabel.textContent = label;
@@ -688,52 +602,16 @@ const tv = t.visualizer;
     packetsG.appendChild(packet);
     packetsG.appendChild(pLabel);
 
-    // Animate main packet
-    waapi.animate(packet, {
-      cx: to.x, cy: to.y,
-      duration,
-      ease: 'inOut(2)',
-      onComplete: () => {
-        packet.remove();
-        pLabel.remove();
-      },
-    });
-
-    // Trails follow with delay
-    waapi.animate(trail1, {
-      cx: to.x, cy: to.y,
-      opacity: [0.5, 0],
-      duration,
-      delay: 60,
-      ease: 'inOut(2)',
-      onComplete: () => trail1.remove(),
-    });
-    waapi.animate(trail2, {
-      cx: to.x, cy: to.y,
-      opacity: [0.2, 0],
-      duration,
-      delay: 120,
-      ease: 'inOut(2)',
-      onComplete: () => trail2.remove(),
-    });
-
-    // Animate label alongside packet
-    waapi.animate(pLabel, {
-      x: to.x, y: to.y - 12,
-      opacity: [1, 0],
-      duration,
-      ease: 'inOut(2)',
-    });
+    waapi.animate(packet, { cx: to.x, cy: to.y, duration, ease: 'inOut(2)', onComplete: () => { packet.remove(); pLabel.remove(); } });
+    waapi.animate(trail1, { cx: to.x, cy: to.y, opacity: [0.5, 0], duration, delay: 60, ease: 'inOut(2)', onComplete: () => trail1.remove() });
+    waapi.animate(trail2, { cx: to.x, cy: to.y, opacity: [0.2, 0], duration, delay: 120, ease: 'inOut(2)', onComplete: () => trail2.remove() });
+    waapi.animate(pLabel, { x: to.x, y: to.y - 12, opacity: [1, 0], duration, ease: 'inOut(2)' });
   }
 
   function flashNode(nodeId: number) {
     const circle = document.getElementById(`vcircle-${nodeId}`);
     if (!circle) return;
-    waapi.animate(circle, {
-      scale: [1, 1.2, 1],
-      duration: 350,
-      ease: 'out(3)',
-    });
+    waapi.animate(circle, { scale: [1, 1.2, 1], duration: 350, ease: 'out(3)' });
   }
 
   function flashNodeColor(nodeId: number, color: string) {
@@ -742,86 +620,302 @@ const tv = t.visualizer;
     const origStroke = circle.getAttribute('stroke') ?? '#6366f1';
     const origFill = circle.getAttribute('fill') ?? '#6366f118';
     waapi.animate(circle, {
-      stroke: [color, origStroke],
-      fill: [color + '44', origFill],
-      scale: [1, 1.3, 1],
-      duration: 500,
-      ease: 'out(3)',
+      stroke: [color, origStroke], fill: [color + '44', origFill],
+      scale: [1, 1.3, 1], duration: 500, ease: 'out(3)',
     });
   }
 
-  // ─── Event application ────────────────────────────────────────────────────────
+  // ─── Narration + Event Log ────────────────────────────────────────────────────
 
-  function applyEvent(event: SimEvent) {
-    renderCluster(event.state);
-
-    const { type, from, to, nodeId } = event;
-
-    if (from && to) {
-      const color = PACKET_COLOR[type] ?? '#38bdf8';
-      const label = PACKET_LABEL[type] ?? '?';
-      animatePacket(from, to, color, label, event.state);
-    }
-
-    if (nodeId && nodeId > 0) flashNode(nodeId);
-    if (from) flashNode(from);
-
-    // Reset timer for heartbeat recipients
-    if (type === 'heartbeat' && to) {
-      const toNode = event.state.nodes.find(n => n.id === to);
-      if (toNode?.state === 'follower') {
-        const pos = nodePositions(event.state.nodes.length)[to - 1];
-        if (pos) startTimerArc(to, pos);
-      }
-    }
-
-    // Update narration
-    narrationText.textContent = event.narration[LANG];
+  function setNarration(type: string, text: string) {
+    narrationText.textContent = text;
     narrationBadge.classList.remove('hidden');
     narrationType.textContent = EVENT_LABELS[type] ?? type;
     narrationType.className = `px-2 py-0.5 rounded text-xs font-mono border ${EVENT_COLORS[type] ?? 'text-slate-300 bg-slate-800 border-slate-700'}`;
+  }
 
-    // Update node detail if selected
-    if (selectedNode !== null) {
-      const nd = event.state.nodes.find(n => n.id === selectedNode);
-      if (nd) renderNodeDetail(nd);
+  function addLogEntry(type: string, description: string) {
+    logCounter++;
+    const ts = new Date().getTime() % 100000; // relative ms for display
+    const div = document.createElement('div');
+    div.className = 'flex items-start gap-2 p-1.5 rounded-lg text-xs';
+    div.innerHTML = `
+      <span class="text-slate-600 font-mono shrink-0 mt-0.5">${String(logCounter).padStart(2, '0')}</span>
+      <span class="px-1.5 py-0.5 rounded border text-xs font-mono shrink-0 ${EVENT_COLORS[type] ?? 'text-slate-400 bg-slate-800 border-slate-700'}">${EVENT_LABELS[type] ?? type}</span>
+      <span class="text-slate-400 leading-tight">${description}</span>
+    `;
+    eventLog.appendChild(div);
+    while (eventLog.children.length > 100) eventLog.removeChild(eventLog.firstChild!);
+    eventLog.scrollTop = eventLog.scrollHeight;
+  }
+
+  // ─── Live Simulation Engine ───────────────────────────────────────────────────
+
+  function randInt(min: number, max: number) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  function scheduleElectionTimer(node: LiveNode) {
+    if (node.electionTimer) clearTimeout(node.electionTimer);
+    node.electionTimer = setTimeout(() => onElectionTimeout(node.id), node.electionTimeout / speedMultiplier);
+    // Restart visual arc
+    startTimerArc(node.id, node.electionTimeout);
+  }
+
+  function resetElectionTimer(node: LiveNode) {
+    // Randomize a new timeout each reset (Raft paper requirement)
+    node.electionTimeout = randInt(ET_MIN, ET_MAX);
+    scheduleElectionTimer(node);
+  }
+
+  function stopNodeTimer(node: LiveNode) {
+    if (node.electionTimer) { clearTimeout(node.electionTimer); node.electionTimer = null; }
+    stopTimerArc(node.id);
+  }
+
+  function stopAllTimers() {
+    for (const node of liveCluster.nodes) stopNodeTimer(node);
+    if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
+  }
+
+  function getLeader(): LiveNode | null {
+    return liveCluster.nodes.find(n => n.state === 'leader') ?? null;
+  }
+
+  function reachablePeers(fromId: number): LiveNode[] {
+    if (isolatedNodes.has(fromId)) return [];
+    return liveCluster.nodes.filter(n =>
+      n.id !== fromId &&
+      n.state !== 'dead' &&
+      !isolatedNodes.has(n.id)
+    );
+  }
+
+  function onElectionTimeout(nodeId: number) {
+    if (!simRunning) return;
+    const node = liveCluster.nodes.find(n => n.id === nodeId);
+    if (!node || node.state === 'dead' || node.state === 'leader') return;
+
+    // Start election
+    liveCluster.term++;
+    node.state = 'candidate';
+    node.term = liveCluster.term;
+    node.votedFor = node.id;
+    node.votesReceived = 1; // vote for self
+    stopNodeTimer(node);
+
+    setNarration('election_timeout', `N${node.id} didn't hear from a leader — starting election (term ${node.term})`);
+    addLogEntry('election_timeout', `N${node.id} → election (term ${node.term})`);
+    flashNodeColor(node.id, '#10b981');
+    renderCluster();
+
+    const peers = reachablePeers(node.id);
+    const majority = Math.floor(liveCluster.nodes.length / 2) + 1;
+
+    if (peers.length === 0) {
+      // No reachable peers — revert to follower
+      node.state = 'follower';
+      node.votedFor = null;
+      node.votesReceived = 0;
+      resetElectionTimer(node);
+      renderCluster();
+      return;
     }
 
-    // Update progress
-    updateProgress();
+    setNarration('request_vote', `N${node.id} is requesting votes from peers`);
+    addLogEntry('request_vote', `N${node.id} → RequestVote to ${peers.map(p => `N${p.id}`).join(', ')}`);
 
-    // Add to event log
-    addEventLogEntry(event, cursor);
+    let grantedVotes = 1; // self vote
+    let responsesPending = peers.length;
 
-    btnStepBack.disabled = cursor <= 0;
-  }
+    for (const peer of peers) {
+      const delay = randInt(50, 300) / speedMultiplier;
+      animatePacket(node.id, peer.id, PACKET_COLOR.request_vote, PACKET_LABEL.request_vote);
 
-  function updateProgress() {
-    const pct = events.length > 0 ? ((cursor + 1) / events.length) * 100 : 0;
-    progressBar.style.width = `${pct}%`;
-    progressLabel.textContent = `${cursor + 1} / ${events.length}`;
-    if (cursor >= 0 && cursor < events.length) {
-      timeLabel.textContent = `t=${events[cursor].timestamp}ms`;
+      setTimeout(() => {
+        if (!simRunning) return;
+        // Re-fetch node in case it changed
+        const candidateNow = liveCluster.nodes.find(n => n.id === nodeId);
+        if (!candidateNow || candidateNow.state !== 'candidate') return;
+
+        const peerNow = liveCluster.nodes.find(n => n.id === peer.id);
+        const granted =
+          peerNow &&
+          peerNow.state !== 'dead' &&
+          !isolatedNodes.has(peer.id) &&
+          (peerNow.votedFor === null || peerNow.votedFor === node.id) &&
+          peerNow.term <= node.term;
+
+        if (granted && peerNow) {
+          peerNow.votedFor = node.id;
+          peerNow.term = node.term;
+          grantedVotes++;
+          animatePacket(peer.id, nodeId, PACKET_COLOR.vote_granted, PACKET_LABEL.vote_granted);
+          addLogEntry('vote_granted', `N${peer.id} grants vote to N${nodeId} (term ${node.term})`);
+        } else {
+          animatePacket(peer.id, nodeId, PACKET_COLOR.vote_denied, PACKET_LABEL.vote_denied);
+          addLogEntry('vote_denied', `N${peer.id} denies vote to N${nodeId}`);
+        }
+
+        responsesPending--;
+
+        if (grantedVotes >= majority && candidateNow.state === 'candidate') {
+          // Won election
+          becomeLeader(candidateNow, grantedVotes);
+        } else if (responsesPending === 0 && candidateNow.state === 'candidate') {
+          // Split vote or lost — revert to follower
+          setNarration('split_vote', `Split vote — no winner. Nodes will timeout and retry`);
+          addLogEntry('split_vote', `N${nodeId} split vote — reverting to follower`);
+          candidateNow.state = 'follower';
+          candidateNow.votedFor = null;
+          candidateNow.votesReceived = 0;
+          resetElectionTimer(candidateNow);
+          renderCluster();
+        }
+      }, delay);
     }
   }
 
-  function renderProgressTicks() {
-    progressTicks.innerHTML = '';
-    const w = progressTrack.clientWidth || 600;
-    events.forEach((ev, i) => {
-      const x = (i / Math.max(events.length - 1, 1)) * 100;
-      const tick = document.createElement('div');
-      tick.style.cssText = `position:absolute;top:0;bottom:0;left:${x}%;width:2px;background:#334155;cursor:pointer;`;
-      tick.title = EVENT_LABELS[ev.type] ?? ev.type;
-      tick.addEventListener('click', (e) => {
-        e.stopPropagation();
-        jumpTo(i);
-      });
-      progressTicks.appendChild(tick);
-    });
+  function becomeLeader(node: LiveNode, votes: number) {
+    if (!simRunning) return;
+    const total = liveCluster.nodes.length;
+
+    node.state = 'leader';
+    node.votesReceived = 0;
+
+    // Reset all other nodes to follower for this term
+    for (const n of liveCluster.nodes) {
+      if (n.id !== node.id && n.state !== 'dead') {
+        n.state = 'follower';
+        n.term = Math.max(n.term, node.term);
+        n.votedFor = null;
+        resetElectionTimer(n);
+      }
+    }
+    stopNodeTimer(node);
+
+    setNarration('leader_elected', `N${node.id} wins election with ${votes}/${total} votes — now leader (term ${node.term})`);
+    addLogEntry('leader_elected', `N${node.id} is leader (term ${node.term})`);
+    flashNodeColor(node.id, '#f59e0b');
+    renderCluster();
+
+    // Start heartbeating
+    if (heartbeatInterval) clearInterval(heartbeatInterval);
+    heartbeatInterval = setInterval(() => {
+      sendHeartbeats(node.id);
+    }, HB_INTERVAL / speedMultiplier);
   }
 
-  function renderNodeDetail(node: NodeState) {
+  function sendHeartbeats(leaderId: number) {
+    if (!simRunning) return;
+    const leader = liveCluster.nodes.find(n => n.id === leaderId);
+    if (!leader || leader.state !== 'leader') {
+      if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
+      return;
+    }
+
+    const followers = reachablePeers(leaderId);
+    if (followers.length === 0) return;
+
+    setNarration('heartbeat', `N${leaderId} sends heartbeats to followers — resetting their timers`);
+    addLogEntry('heartbeat', `N${leaderId} → ♥ to ${followers.map(f => `N${f.id}`).join(', ')}`);
+
+    for (const follower of followers) {
+      animatePacket(leaderId, follower.id, PACKET_COLOR.heartbeat, PACKET_LABEL.heartbeat);
+      const delay = randInt(30, 150) / speedMultiplier;
+      setTimeout(() => {
+        if (!simRunning) return;
+        const f = liveCluster.nodes.find(n => n.id === follower.id);
+        if (f && f.state === 'follower' && !isolatedNodes.has(f.id)) {
+          resetElectionTimer(f);
+        }
+      }, delay);
+    }
+  }
+
+  function initCluster(n: number) {
+    liveCluster.nodes = Array.from({ length: n }, (_, i) => ({
+      id: i + 1,
+      state: 'follower',
+      term: 0,
+      votedFor: null,
+      log: [],
+      commitIndex: -1,
+      electionTimer: null,
+      electionTimeout: randInt(ET_MIN, ET_MAX),
+      votesReceived: 0,
+    }));
+    liveCluster.term = 0;
+  }
+
+  function startSimulation() {
+    stopAllTimers();
+    simRunning = true;
+    packetsG.innerHTML = '';
+    logCounter = 0;
+    eventLog.innerHTML = '';
+    narrationBadge.classList.add('hidden');
+    narrationText.textContent = 'Simulation started — waiting for first election timeout…';
+    nodeDetail.innerHTML = '<p class="text-slate-500 text-xs">Click a node to inspect its state.</p>';
+    selectedNode = null;
+    isolatedNodes.clear();
+
+    for (const node of liveCluster.nodes) {
+      scheduleElectionTimer(node);
+    }
+    renderCluster();
+
+    simStatusDot.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block';
+    simStatusText.textContent = 'Live';
+    simStatusText.className = 'text-emerald-400 text-xs font-mono';
+  }
+
+  function resetSimulation() {
+    stopAllTimers();
+    simRunning = false;
+    initCluster(nodeCount);
+    startSimulation();
+  }
+
+  // ─── Event listeners ──────────────────────────────────────────────────────────
+
+  btnReset.addEventListener('click', resetSimulation);
+
+  selSpeed.addEventListener('change', () => {
+    speedMultiplier = parseFloat(selSpeed.value);
+    // Restart all election timers at new speed
+    for (const node of liveCluster.nodes) {
+      if (node.state === 'follower' || node.state === 'candidate') {
+        resetElectionTimer(node);
+      }
+    }
+    // Restart heartbeat interval if there's a leader
+    const leader = getLeader();
+    if (leader) {
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+      heartbeatInterval = setInterval(() => sendHeartbeats(leader.id), HB_INTERVAL / speedMultiplier);
+    }
+  });
+
+  btnAddNode.addEventListener('click', () => {
+    if (nodeCount >= 9) return;
+    nodeCount++;
+    nodeCountLabel.textContent = String(nodeCount);
+    initCluster(nodeCount);
+    resetSimulation();
+  });
+
+  btnRemoveNode.addEventListener('click', () => {
+    if (nodeCount <= 3) return;
+    nodeCount--;
+    nodeCountLabel.textContent = String(nodeCount);
+    initCluster(nodeCount);
+    resetSimulation();
+  });
+
+  // ─── Node detail panel ───────────────────────────────────────────────────────
+
+  function renderNodeDetail(node: LiveNode) {
     const stateColor =
       node.state === 'leader' ? 'text-amber-400' :
       node.state === 'candidate' ? 'text-emerald-400' :
@@ -853,208 +947,6 @@ const tv = t.visualizer;
     `;
   }
 
-  function addEventLogEntry(event: SimEvent, idx: number) {
-    const div = document.createElement('div');
-    div.dataset.idx = String(idx);
-    div.className = `flex items-start gap-2 p-1.5 rounded-lg cursor-pointer hover:bg-slate-800 transition text-xs`;
-    div.innerHTML = `
-      <span class="text-slate-600 font-mono shrink-0 mt-0.5">${String(idx + 1).padStart(2, '0')}</span>
-      <span class="px-1.5 py-0.5 rounded border text-xs font-mono shrink-0 ${EVENT_COLORS[event.type] ?? 'text-slate-400 bg-slate-800 border-slate-700'}">${EVENT_LABELS[event.type] ?? event.type}</span>
-      <span class="text-slate-400 leading-tight">${event.from ? `N${event.from}` : ''}${event.from && event.to ? '→' : ''}${event.to ? `N${event.to}` : ''}${event.nodeId && event.nodeId > 0 && !event.from && !event.to ? `N${event.nodeId}` : ''}</span>
-      <span class="text-slate-600 font-mono ml-auto shrink-0">${event.timestamp}ms</span>
-    `;
-    div.addEventListener('click', () => jumpTo(idx));
-    eventLog.appendChild(div);
-    eventLog.scrollTop = eventLog.scrollHeight;
-  }
-
-  // ─── Timeline navigation ──────────────────────────────────────────────────────
-
-  function jumpTo(idx: number) {
-    if (idx < 0 || idx >= events.length) return;
-    cursor = idx;
-    eventLog.innerHTML = '';
-    for (let i = 0; i <= cursor; i++) {
-      addEventLogEntry(events[i], i);
-    }
-    applyEvent(events[cursor]);
-    btnStepBack.disabled = cursor <= 0;
-  }
-
-  function stepForward() {
-    if (cursor + 1 >= events.length) {
-      stopPlay();
-      if (looping) {
-        loopIndicator.classList.remove('hidden');
-        loopPauseTimer = setTimeout(() => {
-          loopIndicator.classList.add('hidden');
-          reset(false); // don't re-load scenario, just rewind
-          startPlay();
-        }, 3000);
-      }
-      return;
-    }
-    cursor++;
-    applyEvent(events[cursor]);
-  }
-
-  function stepBack() {
-    if (cursor <= 0) return;
-    cursor--;
-    eventLog.innerHTML = '';
-    for (let i = 0; i <= cursor; i++) {
-      addEventLogEntry(events[i], i);
-    }
-    applyEvent(events[cursor]);
-  }
-
-  // ─── Playback ─────────────────────────────────────────────────────────────────
-
-  function scheduleNext() {
-    if (!playing) return;
-    if (cursor + 1 >= events.length) {
-      stopPlay();
-      if (looping) {
-        loopIndicator.classList.remove('hidden');
-        loopPauseTimer = setTimeout(() => {
-          loopIndicator.classList.add('hidden');
-          reset(false);
-          startPlay();
-        }, 3000);
-      }
-      return;
-    }
-
-    const next = events[cursor + 1];
-    const current = cursor >= 0 ? events[cursor] : { timestamp: 0 };
-    // Minimum 500ms hold between events for readability
-    const rawDelay = (next.timestamp - current.timestamp) / speedMultiplier;
-    const delay = Math.max(500 / speedMultiplier, rawDelay);
-
-    playTimer = setTimeout(() => {
-      stepForward();
-      scheduleNext();
-    }, delay);
-  }
-
-  function startPlay() {
-    if (playing) return;
-    playing = true;
-    btnPlay.textContent = 'Pause';
-    btnPlay.className = 'px-4 py-1.5 text-xs font-mono bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg border border-slate-600 transition';
-    scheduleNext();
-  }
-
-  function stopPlay() {
-    playing = false;
-    if (playTimer) { clearTimeout(playTimer); playTimer = null; }
-    if (loopPauseTimer) { clearTimeout(loopPauseTimer); loopPauseTimer = null; }
-    loopIndicator.classList.add('hidden');
-    btnPlay.textContent = 'Play';
-    btnPlay.className = 'px-4 py-1.5 text-xs font-mono bg-sky-700 hover:bg-sky-600 text-white rounded-lg border border-sky-600 transition';
-  }
-
-  function reset(reloadScenario = true) {
-    // Cancel all timer animations
-    for (const [id] of timerAnimations) {
-      stopTimerArc(id);
-    }
-    timerAnimations.clear();
-
-    if (reloadScenario) {
-      stopPlay();
-    }
-    cursor = -1;
-    selectedNode = null;
-    eventLog.innerHTML = '';
-    narrationBadge.classList.add('hidden');
-    narrationText.textContent = 'Press Play or Step Forward to start the simulation.';
-    nodeDetail.innerHTML = '<p class="text-slate-500 text-xs">Click a node to inspect its state.</p>';
-    progressBar.style.width = '0%';
-    progressLabel.textContent = `0 / ${events.length}`;
-    timeLabel.textContent = 't=0ms';
-    btnStepBack.disabled = true;
-    packetsG.innerHTML = '';
-
-    if (events.length > 0) {
-      renderCluster(events[0].state);
-      renderProgressTicks();
-    }
-  }
-
-  function loadScenario(name: ScenarioName) {
-    stopPlay();
-    events = generateScenario(name, nodeCount);
-    reset(false);
-  }
-
-  // ─── Init ─────────────────────────────────────────────────────────────────────
-
-  loadScenario('normal');
-
-  // ─── Event listeners ──────────────────────────────────────────────────────────
-
-  btnPlay.addEventListener('click', () => {
-    if (playing) stopPlay();
-    else startPlay();
-  });
-
-  btnStepFwd.addEventListener('click', () => {
-    stopPlay();
-    stepForward();
-  });
-
-  btnStepBack.addEventListener('click', () => {
-    stopPlay();
-    stepBack();
-  });
-
-  btnReset.addEventListener('click', () => {
-    loadScenario(selScenario.value as ScenarioName);
-  });
-
-  selScenario.addEventListener('change', () => {
-    loadScenario(selScenario.value as ScenarioName);
-  });
-
-  selSpeed.addEventListener('change', () => {
-    speedMultiplier = parseFloat(selSpeed.value);
-    // Restart timer arcs at new speed if we have a current state
-    if (cursor >= 0) {
-      updateTimerArcs(events[cursor].state);
-    }
-  });
-
-  btnLoop.addEventListener('click', () => {
-    looping = !looping;
-    btnLoop.textContent = `Loop: ${looping ? 'On' : 'Off'}`;
-    btnLoop.className = looping
-      ? 'px-3 py-1.5 text-xs font-mono bg-amber-900/40 hover:bg-amber-800/50 text-amber-300 rounded-lg border border-amber-700/40 transition'
-      : 'px-3 py-1.5 text-xs font-mono bg-slate-700 hover:bg-slate-600 text-slate-400 rounded-lg border border-slate-600 transition';
-  });
-
-  btnAddNode.addEventListener('click', () => {
-    if (nodeCount >= 9) return;
-    nodeCount++;
-    nodeCountLabel.textContent = String(nodeCount);
-    loadScenario(selScenario.value as ScenarioName);
-  });
-
-  btnRemoveNode.addEventListener('click', () => {
-    if (nodeCount <= 3) return;
-    nodeCount--;
-    nodeCountLabel.textContent = String(nodeCount);
-    loadScenario(selScenario.value as ScenarioName);
-  });
-
-  // Progress bar click to jump
-  progressTrack.addEventListener('click', (e: MouseEvent) => {
-    const rect = progressTrack.getBoundingClientRect();
-    const pct = (e.clientX - rect.left) / rect.width;
-    const idx = Math.min(events.length - 1, Math.floor(pct * events.length));
-    if (idx >= 0) jumpTo(idx);
-  });
-
   // ─── KV Terminal ──────────────────────────────────────────────────────────────
 
   const kvStore = new Map<string, string>();
@@ -1068,37 +960,27 @@ const tv = t.visualizer;
     div.className = `font-mono text-sm whitespace-pre ${cls}`;
     div.textContent = line;
     kvOutput.appendChild(div);
-    // Trim scrollback
-    while (kvOutput.children.length > MAX_SCROLLBACK) {
-      kvOutput.removeChild(kvOutput.firstChild!);
-    }
+    while (kvOutput.children.length > MAX_SCROLLBACK) kvOutput.removeChild(kvOutput.firstChild!);
     kvOutput.scrollTop = kvOutput.scrollHeight;
   }
 
   function kvCurrentLeader(): { id: number; nodeCount: number } | null {
-    if (cursor < 0 || cursor >= events.length) return null;
-    const state = events[cursor].state;
+    const state = getLiveState();
     const leader = state.nodes.find(n => n.state === 'leader');
     if (!leader) return null;
     return { id: leader.id, nodeCount: state.nodes.length };
   }
 
-  // Spawn a comet-style packet between two SVG points (not node-to-node, but coord-to-coord)
   function kvSpawnPacket(
-    fromX: number, fromY: number,
-    toX: number, toY: number,
-    color: string, label: string,
-    delay: number,
-    onDone?: () => void,
+    fromX: number, fromY: number, toX: number, toY: number,
+    color: string, label: string, delay: number, onDone?: () => void,
   ) {
     const dur = Math.round(500 / speedMultiplier);
-
     const pkt = svgMake('circle', { cx: fromX, cy: fromY, r: 7, fill: color, opacity: 0.95 });
     const t1  = svgMake('circle', { cx: fromX, cy: fromY, r: 5, fill: color, opacity: 0.5 });
     const t2  = svgMake('circle', { cx: fromX, cy: fromY, r: 3, fill: color, opacity: 0.22 });
     const lbl = svgMake('text', {
-      x: fromX, y: fromY - 11,
-      'text-anchor': 'middle', fill: '#fff',
+      x: fromX, y: fromY - 11, 'text-anchor': 'middle', fill: '#fff',
       'font-size': 8, 'font-family': 'JetBrains Mono, monospace',
       'font-weight': 'bold', 'pointer-events': 'none',
     });
@@ -1113,99 +995,67 @@ const tv = t.visualizer;
   }
 
   function kvAnimateWrite(leaderId: number, followerIds: number[], onDone?: () => void) {
-    if (cursor < 0 || cursor >= events.length) return;
-    const state = events[cursor].state;
+    const state = getLiveState();
     const positions = nodePositions(state.nodes.length);
     const leaderPos = positions[leaderId - 1];
     if (!leaderPos) return;
 
-    const clientX = CLIENT_X;
-    const clientY = CLIENT_Y;
     const ACK_COLOR = '#22d3ee';
 
-    // 1. Client → leader (purple "write")
-    kvSpawnPacket(clientX, clientY, leaderPos.x, leaderPos.y, CLIENT_COLOR, 'write', 0, () => {
+    kvSpawnPacket(CLIENT_X, CLIENT_Y, leaderPos.x, leaderPos.y, CLIENT_COLOR, 'write', 0, () => {
       flashNode(leaderId);
-
-      // 2. Leader → each follower (amber AppendEntries), staggered
       let completed = 0;
       followerIds.forEach((fid, i) => {
         const fPos = positions[fid - 1];
         if (!fPos) return;
-        const stagger = i * 60;
-        kvSpawnPacket(leaderPos.x, leaderPos.y, fPos.x, fPos.y, '#f59e0b', 'AE', stagger, () => {
+        kvSpawnPacket(leaderPos.x, leaderPos.y, fPos.x, fPos.y, '#f59e0b', 'AE', i * 60, () => {
           flashNode(fid);
-          // 3. Each follower → leader ACK (teal)
           kvSpawnPacket(fPos.x, fPos.y, leaderPos.x, leaderPos.y, ACK_COLOR, '✓', 0, () => {
             completed++;
             if (completed === followerIds.length) {
-              // 4. Leader → client commit confirmation (green)
-              kvSpawnPacket(leaderPos.x, leaderPos.y, clientX, clientY, '#4ade80', 'ok', 0, onDone);
+              kvSpawnPacket(leaderPos.x, leaderPos.y, CLIENT_X, CLIENT_Y, '#4ade80', 'ok', 0, onDone);
               flashNode(leaderId);
             }
           });
         });
       });
-
-      // Edge case: no followers
       if (followerIds.length === 0) {
-        kvSpawnPacket(leaderPos.x, leaderPos.y, clientX, clientY, '#4ade80', 'ok', 0, onDone);
+        kvSpawnPacket(leaderPos.x, leaderPos.y, CLIENT_X, CLIENT_Y, '#4ade80', 'ok', 0, onDone);
       }
     });
 
-    // Pulse the permanent client node to show activity
     const clientNodeDot = clientG.querySelector('circle:nth-child(2)') as SVGCircleElement | null;
     if (clientNodeDot) {
-      waapi.animate(clientNodeDot, {
-        r: [14, 18, 14], opacity: [1, 0.6, 1],
-        duration: 600, loop: 2,
-      });
+      waapi.animate(clientNodeDot, { r: [14, 18, 14], opacity: [1, 0.6, 1], duration: 600, loop: 2 });
     }
   }
 
   async function kvExecWrite(op: 'SET' | 'DEL', key: string, value?: string): Promise<void> {
     const leader = kvCurrentLeader();
-    if (!leader) {
-      kvPrint('  ✗ no leader — cluster unavailable', 'text-red-400');
-      return;
-    }
+    if (!leader) { kvPrint('  ✗ no leader — cluster unavailable', 'text-red-400'); return; }
 
-    // Validate DEL before animating
-    if (op === 'DEL' && !kvStore.has(key)) {
-      kvPrint(`  ✗ key not found: ${key}`, 'text-amber-400');
-      return;
-    }
+    if (op === 'DEL' && !kvStore.has(key)) { kvPrint(`  ✗ key not found: ${key}`, 'text-amber-400'); return; }
 
     const command = op === 'SET' ? `SET ${key}=${value}` : `DEL ${key}`;
     kvPrint(`  → leader N${leader.id} received ${op} ${op === 'SET' ? `${key} = ${value}` : key}`, 'text-sky-300');
 
-    // ── Step 1: append entry (pending) to all live nodes ──────────────────────
-    const idx = events[cursor < 0 ? 0 : cursor];
-    const liveState = idx.state;
-    const leaderNode = liveState.nodes.find(n => n.id === leader.id)!;
-    const newTerm = leaderNode.term;
-    const newEntry = { term: newTerm, command, committed: false };
+    const state = getLiveState();
+    const leaderNode = state.nodes.find(n => n.id === leader.id)!;
+    const newEntry = { term: leaderNode.term, command, committed: false };
+    state.nodes.forEach(n => { if (n.state !== 'dead') n.log.push({ ...newEntry }); });
+    renderCluster();
 
-    liveState.nodes.forEach(n => {
-      if (n.state !== 'dead') n.log.push({ ...newEntry });
-    });
-    renderCluster(liveState);
+    const followers = state.nodes.filter(n => n.state === 'follower' && !isolatedNodes.has(n.id)).map(n => n.id);
+    const majority = Math.floor(state.nodes.length / 2) + 1;
 
-    const followers = liveState.nodes.filter(n => n.state === 'follower' && !isolatedNodes.has(n.id)).map(n => n.id);
-    const majority = Math.floor(liveState.nodes.length / 2) + 1;
-
-    // ── Step 2: animate client→leader→followers→ACKs→commit ──────────────────
-    await new Promise<void>(resolve => {
-      kvAnimateWrite(leader.id, followers, resolve);
-    });
+    await new Promise<void>(resolve => { kvAnimateWrite(leader.id, followers, resolve); });
 
     kvPrint(`  → replicating to ${followers.map(id => `N${id}`).join(', ')}...`, 'text-sky-300');
     await new Promise(r => setTimeout(r, 120));
-    kvPrint(`  → majority ACK (${majority}/${liveState.nodes.length})`, 'text-sky-300');
+    kvPrint(`  → majority ACK (${majority}/${state.nodes.length})`, 'text-sky-300');
     await new Promise(r => setTimeout(r, 80));
 
-    // ── Step 3: commit — mark entry committed on all live nodes ──────────────
-    liveState.nodes.forEach(n => {
+    state.nodes.forEach(n => {
       if (n.state !== 'dead') {
         const entry = n.log[n.log.length - 1];
         if (entry && !entry.committed && entry.command === command) {
@@ -1223,10 +1073,9 @@ const tv = t.visualizer;
       kvPrint(`  ✓ committed: deleted ${key}`, 'text-green-400');
     }
 
-    // ── Step 4: re-render cluster + refresh selected node detail ─────────────
-    renderCluster(liveState);
+    renderCluster();
     if (selectedNode !== null) {
-      const nd = liveState.nodes.find(n => n.id === selectedNode);
+      const nd = state.nodes.find(n => n.id === selectedNode);
       if (nd) renderNodeDetail(nd);
     }
   }
@@ -1234,17 +1083,11 @@ const tv = t.visualizer;
   async function kvHandleCommand(raw: string) {
     const trimmed = raw.trim();
     if (!trimmed) return;
-
-    // Echo input
     kvPrint(`$ ${trimmed}`, 'text-green-300');
-
     const parts = trimmed.split(/\s+/);
     const cmd = parts[0].toLowerCase();
 
-    if (cmd === 'clear') {
-      kvOutput.innerHTML = '';
-      return;
-    }
+    if (cmd === 'clear') { kvOutput.innerHTML = ''; return; }
 
     if (cmd === 'help') {
       kvPrint('  Commands:', 'text-slate-400');
@@ -1259,22 +1102,13 @@ const tv = t.visualizer;
     }
 
     if (cmd === 'keys') {
-      if (kvStore.size === 0) {
-        kvPrint('  (empty store)', 'text-slate-500');
-      } else {
-        for (const [k, v] of kvStore) {
-          kvPrint(`  ${k} = ${v}`, 'text-slate-300');
-        }
-      }
+      if (kvStore.size === 0) { kvPrint('  (empty store)', 'text-slate-500'); }
+      else { for (const [k, v] of kvStore) kvPrint(`  ${k} = ${v}`, 'text-slate-300'); }
       return;
     }
 
     if (cmd === 'state') {
-      if (cursor < 0 || cursor >= events.length) {
-        kvPrint('  (simulation not started)', 'text-slate-500');
-        return;
-      }
-      const state = events[cursor].state;
+      const state = getLiveState();
       kvPrint(`  cluster term: ${state.term}`, 'text-slate-300');
       for (const n of state.nodes) {
         const role = n.state === 'leader' ? ' [LEADER]' : n.state === 'dead' ? ' [DEAD]' : '';
@@ -1289,11 +1123,8 @@ const tv = t.visualizer;
       const leader = kvCurrentLeader();
       if (!leader) { kvPrint('  ✗ no leader — cluster unavailable', 'text-red-400'); return; }
       kvPrint(`  → reading from leader N${leader.id}`, 'text-sky-300');
-      if (kvStore.has(key)) {
-        kvPrint(`  ${key} = ${kvStore.get(key)}`, 'text-green-300');
-      } else {
-        kvPrint(`  ✗ key not found: ${key}`, 'text-amber-400');
-      }
+      if (kvStore.has(key)) kvPrint(`  ${key} = ${kvStore.get(key)}`, 'text-green-300');
+      else kvPrint(`  ✗ key not found: ${key}`, 'text-amber-400');
       return;
     }
 
@@ -1315,15 +1146,10 @@ const tv = t.visualizer;
     kvPrint(`  ✗ unknown command: ${cmd}  (type help)`, 'text-red-400');
   }
 
-  // Startup message
   kvPrint('  distributed-kv v1.0  —  Raft-backed key/value store', 'text-slate-500');
   kvPrint('  type help for available commands', 'text-slate-500');
   kvPrint('  use the cluster-admin shell below to kill/revive nodes or create partitions', 'text-slate-600');
-
-  // Focus input on terminal click
   kvTerminal.addEventListener('click', () => kvInput.focus());
-
-  // Handle Enter
   kvInput.addEventListener('keydown', async (e: KeyboardEvent) => {
     if (e.key !== 'Enter') return;
     const val = kvInput.value;
@@ -1343,15 +1169,8 @@ const tv = t.visualizer;
     div.className = `font-mono text-sm whitespace-pre ${cls}`;
     div.textContent = line;
     adminOutput.appendChild(div);
-    while (adminOutput.children.length > ADMIN_MAX_SCROLLBACK) {
-      adminOutput.removeChild(adminOutput.firstChild!);
-    }
+    while (adminOutput.children.length > ADMIN_MAX_SCROLLBACK) adminOutput.removeChild(adminOutput.firstChild!);
     adminOutput.scrollTop = adminOutput.scrollHeight;
-  }
-
-  function adminGetState() {
-    if (cursor < 0 || cursor >= events.length) return null;
-    return events[cursor].state;
   }
 
   function adminParseNodeId(raw: string): number | null {
@@ -1363,16 +1182,11 @@ const tv = t.visualizer;
   async function adminHandleCommand(raw: string) {
     const trimmed = raw.trim();
     if (!trimmed) return;
-
     adminPrint(`# ${trimmed}`, 'text-red-300');
-
     const parts = trimmed.split(/[\s,]+/).filter(Boolean);
     const cmd = parts[0].toLowerCase();
 
-    if (cmd === 'clear') {
-      adminOutput.innerHTML = '';
-      return;
-    }
+    if (cmd === 'clear') { adminOutput.innerHTML = ''; return; }
 
     if (cmd === 'help') {
       adminPrint('  Commands:', 'text-slate-400');
@@ -1390,80 +1204,30 @@ const tv = t.visualizer;
       return;
     }
 
+    const state = getLiveState();
+
     if (cmd === 'kill') {
       const id = adminParseNodeId(parts[1] ?? '');
       if (!id) { adminPrint('  usage: kill <nodeId>  (e.g. kill N3)', 'text-amber-400'); return; }
-      const state = adminGetState();
-      if (!state) { adminPrint('  simulation not started', 'text-slate-500'); return; }
-      const node = state.nodes.find(n => n.id === id);
+      const node = state.nodes.find(n => n.id === id) as LiveNode | undefined;
       if (!node) { adminPrint(`  N${id} not found`, 'text-red-400'); return; }
       if (node.state === 'dead') { adminPrint(`  N${id} is already dead`, 'text-amber-400'); return; }
       const wasLeader = node.state === 'leader';
-      // Flash red before going dead
       flashNodeColor(id, '#ef4444');
       await new Promise(r => setTimeout(r, 300));
       node.state = 'dead';
-      stopTimerArc(id);
-      renderCluster(state);
+      stopNodeTimer(node);
+      if (wasLeader && heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
+      renderCluster();
+      addLogEntry('leader_crash', wasLeader ? `N${id} (leader) crashed` : `N${id} crashed`);
       adminPrint(`  ✗ N${id} is dead${wasLeader ? ' — leader lost' : ''}`, 'text-red-400');
 
-      if (wasLeader) {
-        // Check quorum
-        const liveNodes = state.nodes.filter(n => n.state !== 'dead' && !isolatedNodes.has(n.id));
-        const majority = Math.floor(state.nodes.length / 2) + 1;
-        if (liveNodes.length < majority) {
-          adminPrint('  ✗ quorum lost — cluster unavailable', 'text-red-400');
-          return;
-        }
-
-        // Simulate Raft election
-        const electionDelay = Math.round(800 / speedMultiplier);
-        const voteDelay = Math.round(600 / speedMultiplier);
-
-        // Pick a random live follower as candidate
-        const candidate = liveNodes[Math.floor(Math.random() * liveNodes.length)];
-        const newTerm = (state.term ?? 1) + 1;
-
-        await new Promise(r => setTimeout(r, electionDelay));
-        adminPrint(`  → election timeout on N${candidate.id} (term ${newTerm})`, 'text-amber-300');
-
-        candidate.state = 'candidate';
-        candidate.term = newTerm;
-        renderCluster(state);
-        flashNodeColor(candidate.id, '#10b981');
-
-        await new Promise(r => setTimeout(r, 200 / speedMultiplier));
-        adminPrint(`  → N${candidate.id} requests votes...`, 'text-amber-300');
-
-        await new Promise(r => setTimeout(r, voteDelay));
-
-        // Candidate wins majority
-        const votesNeeded = majority;
-        adminPrint(`  → N${candidate.id} wins majority (${liveNodes.length}/${state.nodes.filter(n => n.state !== 'dead').length} live) — new leader`, 'text-amber-300');
-
-        candidate.state = 'leader';
-        candidate.votedFor = candidate.id;
-        state.term = newTerm;
-        for (const n of state.nodes) {
-          if (n.id !== candidate.id && n.state !== 'dead') {
-            n.state = 'follower';
-            n.term = newTerm;
-          }
-        }
-        renderCluster(state);
-        flashNodeColor(candidate.id, '#f59e0b');
-
-        await new Promise(r => setTimeout(r, 100));
-        adminPrint(`  ✓ cluster recovered: N${candidate.id} is leader (term ${newTerm})`, 'text-green-400');
+      const liveNodes = state.nodes.filter(n => n.state !== 'dead' && !isolatedNodes.has(n.id));
+      const majority = Math.floor(state.nodes.length / 2) + 1;
+      if (liveNodes.length < majority) {
+        adminPrint('  ✗ quorum lost — cluster unavailable', 'text-red-400');
       } else {
-        // Killed a follower — check quorum
-        const liveCount = state.nodes.filter(n => n.state !== 'dead').length;
-        const majority = Math.floor(state.nodes.length / 2) + 1;
-        if (liveCount < majority) {
-          adminPrint(`  ⚠ quorum lost — ${liveCount}/${state.nodes.length} alive, need ${majority}`, 'text-red-400');
-        } else {
-          adminPrint(`  quorum intact — ${liveCount}/${state.nodes.length} alive`, 'text-slate-400');
-        }
+        adminPrint(`  quorum intact — ${liveNodes.length}/${state.nodes.length} alive`, 'text-slate-400');
       }
       return;
     }
@@ -1471,19 +1235,19 @@ const tv = t.visualizer;
     if (cmd === 'revive') {
       const id = adminParseNodeId(parts[1] ?? '');
       if (!id) { adminPrint('  usage: revive <nodeId>  (e.g. revive N3)', 'text-amber-400'); return; }
-      const state = adminGetState();
-      if (!state) { adminPrint('  simulation not started', 'text-slate-500'); return; }
-      const node = state.nodes.find(n => n.id === id);
+      const node = state.nodes.find(n => n.id === id) as LiveNode | undefined;
       if (!node) { adminPrint(`  N${id} not found`, 'text-red-400'); return; }
       if (node.state !== 'dead') { adminPrint(`  N${id} is not dead (state: ${node.state})`, 'text-amber-400'); return; }
-      // Sync term with current cluster term
       const currentTerm = Math.max(...state.nodes.map(n => n.term));
       node.state = 'follower';
       node.term = currentTerm;
       node.votedFor = null;
-      stopTimerArc(id);
-      renderCluster(state);
+      node.votesReceived = 0;
+      node.electionTimeout = randInt(ET_MIN, ET_MAX);
+      scheduleElectionTimer(node);
+      renderCluster();
       flashNodeColor(id, '#22c55e');
+      addLogEntry('node_recover', `N${id} revived as follower (term ${currentTerm})`);
       adminPrint(`  ✓ N${id} rejoined as follower (term ${currentTerm})`, 'text-green-400');
       return;
     }
@@ -1491,16 +1255,10 @@ const tv = t.visualizer;
     if (cmd === 'partition') {
       const ids = parts.slice(1).map(p => adminParseNodeId(p)).filter(Boolean) as number[];
       if (ids.length === 0) { adminPrint('  usage: partition N1,N2  (comma or space separated)', 'text-amber-400'); return; }
-      const state = adminGetState();
-      if (!state) { adminPrint('  simulation not started', 'text-slate-500'); return; }
       for (const id of ids) {
-        if (!state.nodes.find(n => n.id === id)) {
-          adminPrint(`  N${id} not found — skipped`, 'text-amber-400');
-          continue;
-        }
+        if (!state.nodes.find(n => n.id === id)) { adminPrint(`  N${id} not found — skipped`, 'text-amber-400'); continue; }
         isolatedNodes.add(id);
         adminPrint(`  N${id} isolated — packets to/from this node will be dropped`, 'text-red-400');
-        // Show a drop animation from each live non-isolated node to this node
         const positions = nodePositions(state.nodes.length);
         for (const other of state.nodes) {
           if (other.id === id || other.state === 'dead' || isolatedNodes.has(other.id)) continue;
@@ -1509,42 +1267,30 @@ const tv = t.visualizer;
           if (!fromPos || !toPos) continue;
           const midX = (fromPos.x + toPos.x) / 2;
           const midY = (fromPos.y + toPos.y) / 2;
-          // Draw a red ✗ at midpoint that fades
           const cross = svgMake('text', {
-            x: midX, y: midY,
-            'text-anchor': 'middle', 'dominant-baseline': 'middle',
+            x: midX, y: midY, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
             fill: '#ef4444', 'font-size': 14, 'font-weight': 'bold',
-            'font-family': 'JetBrains Mono, monospace',
-            'pointer-events': 'none', opacity: 1,
+            'font-family': 'JetBrains Mono, monospace', 'pointer-events': 'none', opacity: 1,
           });
           cross.textContent = '✗';
           packetsG.appendChild(cross);
-          waapi.animate(cross, {
-            opacity: [1, 0],
-            duration: 900,
-            delay: Math.random() * 200,
-            ease: 'out(2)',
-            onComplete: () => cross.remove(),
-          });
+          waapi.animate(cross, { opacity: [1, 0], duration: 900, delay: Math.random() * 200, ease: 'out(2)', onComplete: () => cross.remove() });
         }
       }
-      renderCluster(state);
+      renderCluster();
       return;
     }
 
     if (cmd === 'heal') {
-      const state = adminGetState();
       if (isolatedNodes.size === 0) { adminPrint('  no active partitions', 'text-slate-500'); return; }
       const healed = [...isolatedNodes].map(id => `N${id}`).join(', ');
       isolatedNodes.clear();
-      if (state) renderCluster(state);
+      renderCluster();
       adminPrint(`  partition healed — restored: ${healed}`, 'text-green-400');
       return;
     }
 
     if (cmd === 'quorum') {
-      const state = adminGetState();
-      if (!state) { adminPrint('  simulation not started', 'text-slate-500'); return; }
       const total = state.nodes.length;
       const alive = state.nodes.filter(n => n.state !== 'dead').length;
       const majority = Math.floor(total / 2) + 1;
@@ -1557,8 +1303,6 @@ const tv = t.visualizer;
     }
 
     if (cmd === 'leader') {
-      const state = adminGetState();
-      if (!state) { adminPrint('  simulation not started', 'text-slate-500'); return; }
       const leader = state.nodes.find(n => n.state === 'leader');
       if (!leader) { adminPrint('  no leader — cluster in election or all dead', 'text-red-400'); return; }
       adminPrint(`  leader: N${leader.id}  (term ${leader.term})`, 'text-amber-300');
@@ -1566,15 +1310,11 @@ const tv = t.visualizer;
     }
 
     if (cmd === 'term') {
-      const state = adminGetState();
-      if (!state) { adminPrint('  simulation not started', 'text-slate-500'); return; }
       adminPrint(`  cluster term: ${state.term}`, 'text-slate-300');
       return;
     }
 
     if (cmd === 'logs') {
-      const state = adminGetState();
-      if (!state) { adminPrint('  simulation not started', 'text-slate-500'); return; }
       adminPrint('  node   log   commitIndex  state', 'text-slate-500');
       adminPrint('  ──────────────────────────────', 'text-slate-700');
       for (const n of state.nodes) {
@@ -1586,8 +1326,6 @@ const tv = t.visualizer;
     }
 
     if (cmd === 'status') {
-      const state = adminGetState();
-      if (!state) { adminPrint('  simulation not started', 'text-slate-500'); return; }
       const leader = state.nodes.find(n => n.state === 'leader');
       const total = state.nodes.length;
       const alive = state.nodes.filter(n => n.state !== 'dead').length;
@@ -1596,9 +1334,7 @@ const tv = t.visualizer;
       adminPrint(`  cluster term : ${state.term}`, 'text-slate-300');
       adminPrint(`  leader       : ${leader ? `N${leader.id} (term ${leader.term})` : 'none'}`, leader ? 'text-amber-300' : 'text-red-400');
       adminPrint(`  quorum       : ${alive}/${total} alive — majority ${majority} — ${hasQuorum ? 'OK' : 'LOST'}`, hasQuorum ? 'text-green-400' : 'text-red-400');
-      if (isolatedNodes.size > 0) {
-        adminPrint(`  partitioned  : ${[...isolatedNodes].map(id => `N${id}`).join(', ')}`, 'text-red-400');
-      }
+      if (isolatedNodes.size > 0) adminPrint(`  partitioned  : ${[...isolatedNodes].map(id => `N${id}`).join(', ')}`, 'text-red-400');
       adminPrint('  ──────────────────────────────', 'text-slate-700');
       for (const n of state.nodes) {
         const isolated = isolatedNodes.has(n.id) ? ' [ISOLATED]' : '';
@@ -1612,17 +1348,19 @@ const tv = t.visualizer;
     adminPrint(`  unknown command: ${cmd}  (type help)`, 'text-red-400');
   }
 
-  // Admin startup message
   adminPrint('  cluster-admin v1.0  —  elevated cluster control', 'text-slate-500');
   adminPrint('  ⚠ mutations apply to live simulation state', 'text-amber-900/60');
   adminPrint('  type help for available commands', 'text-slate-600');
-
   adminTerminal.addEventListener('click', () => adminInput.focus());
-
   adminInput.addEventListener('keydown', async (e: KeyboardEvent) => {
     if (e.key !== 'Enter') return;
     const val = adminInput.value;
     adminInput.value = '';
     await adminHandleCommand(val);
   });
+
+  // ─── Bootstrap ────────────────────────────────────────────────────────────────
+
+  initCluster(nodeCount);
+  startSimulation();
 </script>
