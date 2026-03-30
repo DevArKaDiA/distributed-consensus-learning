@@ -1191,7 +1191,7 @@ const tv = t.visualizer;
     });
     renderCluster(liveState);
 
-    const followers = liveState.nodes.filter(n => n.state === 'follower').map(n => n.id);
+    const followers = liveState.nodes.filter(n => n.state === 'follower' && !isolatedNodes.has(n.id)).map(n => n.id);
     const majority = Math.floor(liveState.nodes.length / 2) + 1;
 
     // ── Step 2: animate client→leader→followers→ACKs→commit ──────────────────
@@ -1405,8 +1405,66 @@ const tv = t.visualizer;
       node.state = 'dead';
       stopTimerArc(id);
       renderCluster(state);
-      adminPrint(`  N${id} killed`, 'text-red-400');
-      if (wasLeader) adminPrint('  ⚠ leader is down — a new election will be needed', 'text-amber-300');
+      adminPrint(`  ✗ N${id} is dead${wasLeader ? ' — leader lost' : ''}`, 'text-red-400');
+
+      if (wasLeader) {
+        // Check quorum
+        const liveNodes = state.nodes.filter(n => n.state !== 'dead' && !isolatedNodes.has(n.id));
+        const majority = Math.floor(state.nodes.length / 2) + 1;
+        if (liveNodes.length < majority) {
+          adminPrint('  ✗ quorum lost — cluster unavailable', 'text-red-400');
+          return;
+        }
+
+        // Simulate Raft election
+        const electionDelay = Math.round(800 / speedMultiplier);
+        const voteDelay = Math.round(600 / speedMultiplier);
+
+        // Pick a random live follower as candidate
+        const candidate = liveNodes[Math.floor(Math.random() * liveNodes.length)];
+        const newTerm = (state.term ?? 1) + 1;
+
+        await new Promise(r => setTimeout(r, electionDelay));
+        adminPrint(`  → election timeout on N${candidate.id} (term ${newTerm})`, 'text-amber-300');
+
+        candidate.state = 'candidate';
+        candidate.term = newTerm;
+        renderCluster(state);
+        flashNodeColor(candidate.id, '#10b981');
+
+        await new Promise(r => setTimeout(r, 200 / speedMultiplier));
+        adminPrint(`  → N${candidate.id} requests votes...`, 'text-amber-300');
+
+        await new Promise(r => setTimeout(r, voteDelay));
+
+        // Candidate wins majority
+        const votesNeeded = majority;
+        adminPrint(`  → N${candidate.id} wins majority (${liveNodes.length}/${state.nodes.filter(n => n.state !== 'dead').length} live) — new leader`, 'text-amber-300');
+
+        candidate.state = 'leader';
+        candidate.votedFor = candidate.id;
+        state.term = newTerm;
+        for (const n of state.nodes) {
+          if (n.id !== candidate.id && n.state !== 'dead') {
+            n.state = 'follower';
+            n.term = newTerm;
+          }
+        }
+        renderCluster(state);
+        flashNodeColor(candidate.id, '#f59e0b');
+
+        await new Promise(r => setTimeout(r, 100));
+        adminPrint(`  ✓ cluster recovered: N${candidate.id} is leader (term ${newTerm})`, 'text-green-400');
+      } else {
+        // Killed a follower — check quorum
+        const liveCount = state.nodes.filter(n => n.state !== 'dead').length;
+        const majority = Math.floor(state.nodes.length / 2) + 1;
+        if (liveCount < majority) {
+          adminPrint(`  ⚠ quorum lost — ${liveCount}/${state.nodes.length} alive, need ${majority}`, 'text-red-400');
+        } else {
+          adminPrint(`  quorum intact — ${liveCount}/${state.nodes.length} alive`, 'text-slate-400');
+        }
+      }
       return;
     }
 
@@ -1418,10 +1476,15 @@ const tv = t.visualizer;
       const node = state.nodes.find(n => n.id === id);
       if (!node) { adminPrint(`  N${id} not found`, 'text-red-400'); return; }
       if (node.state !== 'dead') { adminPrint(`  N${id} is not dead (state: ${node.state})`, 'text-amber-400'); return; }
+      // Sync term with current cluster term
+      const currentTerm = Math.max(...state.nodes.map(n => n.term));
       node.state = 'follower';
+      node.term = currentTerm;
+      node.votedFor = null;
+      stopTimerArc(id);
       renderCluster(state);
       flashNodeColor(id, '#22c55e');
-      adminPrint(`  N${id} revived as follower (term ${node.term})`, 'text-green-400');
+      adminPrint(`  ✓ N${id} rejoined as follower (term ${currentTerm})`, 'text-green-400');
       return;
     }
 
@@ -1437,6 +1500,33 @@ const tv = t.visualizer;
         }
         isolatedNodes.add(id);
         adminPrint(`  N${id} isolated — packets to/from this node will be dropped`, 'text-red-400');
+        // Show a drop animation from each live non-isolated node to this node
+        const positions = nodePositions(state.nodes.length);
+        for (const other of state.nodes) {
+          if (other.id === id || other.state === 'dead' || isolatedNodes.has(other.id)) continue;
+          const fromPos = positions[other.id - 1];
+          const toPos = positions[id - 1];
+          if (!fromPos || !toPos) continue;
+          const midX = (fromPos.x + toPos.x) / 2;
+          const midY = (fromPos.y + toPos.y) / 2;
+          // Draw a red ✗ at midpoint that fades
+          const cross = svgMake('text', {
+            x: midX, y: midY,
+            'text-anchor': 'middle', 'dominant-baseline': 'middle',
+            fill: '#ef4444', 'font-size': 14, 'font-weight': 'bold',
+            'font-family': 'JetBrains Mono, monospace',
+            'pointer-events': 'none', opacity: 1,
+          });
+          cross.textContent = '✗';
+          packetsG.appendChild(cross);
+          waapi.animate(cross, {
+            opacity: [1, 0],
+            duration: 900,
+            delay: Math.random() * 200,
+            ease: 'out(2)',
+            onComplete: () => cross.remove(),
+          });
+        }
       }
       renderCluster(state);
       return;
