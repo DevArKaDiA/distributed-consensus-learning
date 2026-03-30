@@ -978,65 +978,94 @@ const tv = t.visualizer;
     return { id: leader.id, nodeCount: state.nodes.length };
   }
 
-  function kvAnimateClientPacket(leaderId: number) {
-    // Animate a dashed line packet from a virtual "client" point (outside circle) to the leader
+  // Spawn a comet-style packet between two SVG points (not node-to-node, but coord-to-coord)
+  function kvSpawnPacket(
+    fromX: number, fromY: number,
+    toX: number, toY: number,
+    color: string, label: string,
+    delay: number,
+    onDone?: () => void,
+  ) {
+    const dur = Math.round(500 / speedMultiplier);
+
+    const pkt = svgMake('circle', { cx: fromX, cy: fromY, r: 7, fill: color, opacity: 0.95 });
+    const t1  = svgMake('circle', { cx: fromX, cy: fromY, r: 5, fill: color, opacity: 0.5 });
+    const t2  = svgMake('circle', { cx: fromX, cy: fromY, r: 3, fill: color, opacity: 0.22 });
+    const lbl = svgMake('text', {
+      x: fromX, y: fromY - 11,
+      'text-anchor': 'middle', fill: '#fff',
+      'font-size': 8, 'font-family': 'JetBrains Mono, monospace',
+      'font-weight': 'bold', 'pointer-events': 'none',
+    });
+    lbl.textContent = label;
+    packetsG.append(t2, t1, pkt, lbl);
+
+    const ease = 'inOut(2)';
+    waapi.animate(pkt, { cx: toX, cy: toY, duration: dur, delay, ease, onComplete: () => { pkt.remove(); onDone?.(); } });
+    waapi.animate(t1,  { cx: toX, cy: toY, duration: dur, delay: delay + 60, ease, onComplete: () => t1.remove() });
+    waapi.animate(t2,  { cx: toX, cy: toY, duration: dur, delay: delay + 120, ease, onComplete: () => t2.remove() });
+    waapi.animate(lbl, { x: toX, y: toY - 11, opacity: [1, 0], duration: dur, delay, ease, onComplete: () => lbl.remove() });
+  }
+
+  function kvAnimateWrite(leaderId: number, followerIds: number[], onDone?: () => void) {
     if (cursor < 0 || cursor >= events.length) return;
     const state = events[cursor].state;
     const positions = nodePositions(state.nodes.length);
     const leaderPos = positions[leaderId - 1];
     if (!leaderPos) return;
 
-    // Client origin: slightly outside the SVG bottom-left corner area
-    const clientX = 40;
-    const clientY = SVG_H - 30;
+    // Client dot — a small labeled circle anchored to bottom-center of SVG
+    const clientX = SVG_W / 2;
+    const clientY = SVG_H - 18;
+    const CLIENT_COLOR = '#a855f7';
+    const ACK_COLOR = '#22d3ee';
 
-    // Dashed line from client to leader
-    const dashLine = svgMake('line', {
-      x1: clientX, y1: clientY, x2: leaderPos.x, y2: leaderPos.y,
-      stroke: '#a855f7',
-      'stroke-width': 1.5,
-      'stroke-dasharray': '6 4',
-      opacity: 0.7,
-    });
-    packetsG.appendChild(dashLine);
+    // 1. Client → leader (purple "write")
+    kvSpawnPacket(clientX, clientY, leaderPos.x, leaderPos.y, CLIENT_COLOR, 'write', 0, () => {
+      flashNode(leaderId);
 
-    // Packet circle
-    const pkt = svgMake('circle', {
-      cx: clientX, cy: clientY, r: 7,
-      fill: '#a855f7', opacity: 0.95,
+      // 2. Leader → each follower (amber AppendEntries), staggered
+      let completed = 0;
+      followerIds.forEach((fid, i) => {
+        const fPos = positions[fid - 1];
+        if (!fPos) return;
+        const stagger = i * 60;
+        kvSpawnPacket(leaderPos.x, leaderPos.y, fPos.x, fPos.y, '#f59e0b', 'AE', stagger, () => {
+          flashNode(fid);
+          // 3. Each follower → leader ACK (teal)
+          kvSpawnPacket(fPos.x, fPos.y, leaderPos.x, leaderPos.y, ACK_COLOR, '✓', 0, () => {
+            completed++;
+            if (completed === followerIds.length) {
+              // 4. Leader → client commit confirmation (green)
+              kvSpawnPacket(leaderPos.x, leaderPos.y, clientX, clientY, '#4ade80', 'ok', 0, onDone);
+              flashNode(leaderId);
+            }
+          });
+        });
+      });
+
+      // Edge case: no followers
+      if (followerIds.length === 0) {
+        kvSpawnPacket(leaderPos.x, leaderPos.y, clientX, clientY, '#4ade80', 'ok', 0, onDone);
+      }
     });
-    const pktLabel = svgMake('text', {
-      x: clientX, y: clientY - 12,
-      'text-anchor': 'middle',
-      fill: '#fff',
-      'font-size': 8,
-      'font-family': 'JetBrains Mono, monospace',
-      'font-weight': 'bold',
+
+    // Draw a subtle client indicator dot that pulses
+    const clientDot = svgMake('circle', { cx: clientX, cy: clientY, r: 5, fill: CLIENT_COLOR, opacity: 0.9 });
+    const clientLbl = svgMake('text', {
+      x: clientX, y: clientY - 10,
+      'text-anchor': 'middle', fill: '#c4b5fd',
+      'font-size': 8, 'font-family': 'JetBrains Mono, monospace',
       'pointer-events': 'none',
     });
-    pktLabel.textContent = 'KV';
-    packetsG.appendChild(pkt);
-    packetsG.appendChild(pktLabel);
-
-    const dur = Math.round(600 / speedMultiplier);
-    waapi.animate(pkt, {
-      cx: leaderPos.x, cy: leaderPos.y,
-      duration: dur,
-      ease: 'inOut(2)',
-      onComplete: () => {
-        pkt.remove();
-        pktLabel.remove();
-        dashLine.remove();
-      },
+    clientLbl.textContent = 'client';
+    packetsG.append(clientDot, clientLbl);
+    waapi.animate(clientDot, { opacity: [0.9, 0.3, 0.9], duration: 800, loop: 2,
+      onComplete: () => { clientDot.remove(); clientLbl.remove(); }
     });
-    waapi.animate(pktLabel, {
-      x: leaderPos.x, y: leaderPos.y - 12,
-      opacity: [1, 0],
-      duration: dur,
-      ease: 'inOut(2)',
+    waapi.animate(clientLbl, { opacity: [1, 0], duration: 1600, delay: 400,
+      onComplete: () => clientLbl.remove()
     });
-
-    flashNode(leaderId);
   }
 
   async function kvExecWrite(op: 'SET' | 'DEL', key: string, value?: string): Promise<void> {
@@ -1046,23 +1075,22 @@ const tv = t.visualizer;
       return;
     }
 
-    const cmd = op === 'SET' ? `${key}=${value}` : `DEL ${key}`;
+    const cmd = op === 'SET' ? `${key} = ${value}` : key;
     kvPrint(`  → leader N${leader.id} received ${op} ${cmd}`, 'text-sky-300');
-    kvAnimateClientPacket(leader.id);
-
-    // Simulate replication delay
-    await new Promise(r => setTimeout(r, 180));
 
     const state = events[cursor < 0 ? 0 : cursor].state;
     const followers = state.nodes.filter(n => n.state === 'follower').map(n => n.id);
-    const majority = Math.floor(leader.nodeCount / 2) + 1;
+    const majority = Math.floor((state.nodes.length) / 2) + 1;
 
-    if (followers.length > 0) {
-      kvPrint(`  → replicating to ${followers.map(id => `N${id}`).join(', ')}...`, 'text-sky-300');
-      await new Promise(r => setTimeout(r, 220));
-      kvPrint(`  → majority ACK (${majority}/${leader.nodeCount})`, 'text-sky-300');
-      await new Promise(r => setTimeout(r, 100));
-    }
+    // Fire the full animation: client→leader→followers→ACKs→commit
+    await new Promise<void>(resolve => {
+      kvAnimateWrite(leader.id, followers, resolve);
+    });
+
+    kvPrint(`  → replicating to ${followers.map(id => `N${id}`).join(', ')}...`, 'text-sky-300');
+    await new Promise(r => setTimeout(r, 120));
+    kvPrint(`  → majority ACK (${majority}/${state.nodes.length})`, 'text-sky-300');
+    await new Promise(r => setTimeout(r, 80));
 
     if (op === 'SET') {
       kvStore.set(key, value!);
