@@ -1,39 +1,71 @@
 ---
 import '../styles/global.css';
+import { useTranslations, getAlternateLang, localePath } from '../i18n';
+import type { Lang } from '../i18n';
+
 export interface Props {
   title: string;
   description?: string;
+  lang: Lang;
+  currentPath?: string; // e.g. '/problem', '/raft', '/'
 }
-const { title, description = 'Learn distributed consensus and the Raft algorithm interactively.' } = Astro.props;
+
+const {
+  title,
+  description = 'Learn distributed consensus and the Raft algorithm interactively.',
+  lang,
+  currentPath = '/',
+} = Astro.props;
+
+const t = useTranslations(lang);
 const base = import.meta.env.BASE_URL;
+const altLang = getAlternateLang(lang);
+const altHref = localePath(altLang, currentPath, base);
+const navLinks = [
+  { key: 'problem', path: '/problem' },
+  { key: 'raft',    path: '/raft' },
+  { key: 'wild',    path: '/in-the-wild' },
+  { key: 'code',    path: '/code' },
+  { key: 'resources', path: '/resources' },
+] as const;
 ---
 <!doctype html>
-<html lang="en">
+<html lang={lang}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{title} — Distributed Consensus Learning</title>
     <meta name="description" content={description} />
+    <link rel="alternate" hreflang={altLang} href={altHref} />
     <link rel="icon" type="image/svg+xml" href={`${base}/favicon.svg`} />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   </head>
   <body class="min-h-screen bg-slate-950 text-slate-200">
-    <!-- Nav -->
+
     <nav class="sticky top-0 z-50 bg-slate-950/90 backdrop-blur border-b border-slate-800">
       <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-        <a href={base} class="font-bold text-sky-400 text-sm tracking-wide hover:text-sky-300 transition">
+        <a href={localePath(lang, '/', base)} class="font-bold text-sky-400 text-sm tracking-wide hover:text-sky-300 transition font-mono">
           DCL
         </a>
-        <div class="flex items-center gap-6 text-sm">
-          <a href={`${base}/problem`} class="text-slate-400 hover:text-slate-200 transition">The Problem</a>
-          <a href={`${base}/raft`} class="text-slate-400 hover:text-slate-200 transition">Raft</a>
-          <a href={`${base}/in-the-wild`} class="text-slate-400 hover:text-slate-200 transition">In the Wild</a>
-          <a href={`${base}/code`} class="text-slate-400 hover:text-slate-200 transition">Code</a>
-          <a href={`${base}/resources`} class="text-slate-400 hover:text-slate-200 transition">Resources</a>
-          <!-- Lang toggle placeholder -->
-          <button id="lang-toggle" class="px-2 py-1 rounded text-xs bg-slate-800 text-slate-300 hover:bg-slate-700 transition">EN / ES</button>
+        <div class="flex items-center gap-5 text-sm">
+          {navLinks.map(({ key, path }) => (
+            <a
+              href={localePath(lang, path, base)}
+              class={`transition ${currentPath === path ? 'text-slate-200' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              {t.nav[key as keyof typeof t.nav]}
+            </a>
+          ))}
+          <!-- Lang switcher -->
+          <a
+            href={altHref}
+            class="px-2.5 py-1 rounded text-xs font-mono bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition"
+            title={altLang === 'es' ? 'Cambiar a español' : 'Switch to English'}
+          >
+            {altLang === 'es' ? 'ES' : 'EN'}
+          </a>
         </div>
       </div>
     </nav>
@@ -44,8 +76,8 @@ const base = import.meta.env.BASE_URL;
 
     <footer class="border-t border-slate-800 mt-24 py-8 text-center text-slate-500 text-sm">
       <p>
-        Built to understand distributed systems ·
-        <a href="https://raft.github.io/" target="_blank" class="text-sky-500 hover:text-sky-400">Raft paper</a> ·
+        {t.footer.built} ·
+        <a href="https://raft.github.io/" target="_blank" class="text-sky-500 hover:text-sky-400">{t.footer.paper}</a> ·
         <a href="https://github.com/DevArKaDiA/distributed-consensus-learning" target="_blank" class="text-sky-500 hover:text-sky-400">GitHub</a>
       </p>
     </footer>

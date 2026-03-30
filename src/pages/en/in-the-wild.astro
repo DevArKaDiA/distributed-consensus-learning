@@ -1,5 +1,8 @@
 ---
-import Base from '../layouts/Base.astro';
+const lang = 'en';
+import { useTranslations } from '../../i18n';
+const t = useTranslations('en');
+import Base from '../../layouts/Base.astro';
 const base = import.meta.env.BASE_URL;
 
 const systems = [
@@ -71,7 +74,9 @@ const systems = [
   },
 ];
 ---
-<Base title="Raft in the Wild" description="Real systems that use Raft: etcd, CockroachDB, TiKV, Consul, Kafka KRaft, and more.">
+import { useTranslations } from '../../i18n';
+const t = useTranslations('en');
+<Base title="Raft in the Wild" lang={lang} description="Real systems that use Raft: etcd, CockroachDB, TiKV, Consul, Kafka KRaft, and more.">
 
   <section class="max-w-4xl mx-auto px-4 pt-16 pb-8">
     <p class="text-sky-400 text-sm font-mono mb-3">Chapter 3</p>

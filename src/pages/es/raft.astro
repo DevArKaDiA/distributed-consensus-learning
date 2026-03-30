@@ -1,0 +1,151 @@
+---
+import Base from '../../layouts/Base.astro';
+import { useTranslations, localePath } from '../../i18n';
+const lang = 'es';
+const t = useTranslations(lang);
+const base = import.meta.env.BASE_URL;
+const lp = (path: string) => localePath(lang, path, base);
+---
+<Base title={t.raft.h1} {lang} currentPath="/raft">
+
+  <section class="max-w-4xl mx-auto px-4 pt-16 pb-8">
+    <p class="text-sky-400 text-sm font-mono mb-3">{t.raft.chapter}</p>
+    <h1 class="text-4xl font-bold text-white mb-4">{t.raft.h1}</h1>
+    <p class="text-slate-400 text-lg mb-6">{t.raft.intro}</p>
+    <div class="flex gap-3 text-sm flex-wrap">
+      <a href="#leader-election" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">{t.raft.election_h2}</a>
+      <a href="#log-replication" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">{t.raft.replication_h2}</a>
+      <a href="#safety" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">{t.raft.safety_h2}</a>
+    </div>
+  </section>
+
+  <section class="max-w-4xl mx-auto px-4 py-4">
+    <div class="bg-sky-900/20 border border-sky-700/40 rounded-xl p-5">
+      <h3 class="font-semibold text-sky-400 mb-2">{t.raft.insight_title}</h3>
+      <p class="text-slate-400 text-sm leading-relaxed" set:html={t.raft.insight_body} />
+    </div>
+  </section>
+
+  <section class="max-w-4xl mx-auto px-4 py-8">
+    <h2 class="text-2xl font-bold text-white mb-4">{t.raft.states_h2}</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="bg-slate-900 rounded-xl border border-yellow-700/50 p-5">
+        <div class="w-8 h-8 rounded-full bg-yellow-500/20 border-2 border-yellow-500 flex items-center justify-center text-xs font-mono font-bold text-yellow-400 mb-3">L</div>
+        <h4 class="font-semibold text-yellow-400 mb-1">{t.raft.leader_title}</h4>
+        <p class="text-slate-400 text-xs leading-relaxed">{t.raft.leader_desc}</p>
+      </div>
+      <div class="bg-slate-900 rounded-xl border border-indigo-700/50 p-5">
+        <div class="w-8 h-8 rounded-full bg-indigo-500/20 border-2 border-indigo-500 flex items-center justify-center text-xs font-mono font-bold text-indigo-400 mb-3">F</div>
+        <h4 class="font-semibold text-indigo-400 mb-1">{t.raft.follower_title}</h4>
+        <p class="text-slate-400 text-xs leading-relaxed">{t.raft.follower_desc}</p>
+      </div>
+      <div class="bg-slate-900 rounded-xl border border-emerald-700/50 p-5">
+        <div class="w-8 h-8 rounded-full bg-emerald-500/20 border-2 border-emerald-500 flex items-center justify-center text-xs font-mono font-bold text-emerald-400 mb-3">C</div>
+        <h4 class="font-semibold text-emerald-400 mb-1">{t.raft.candidate_title}</h4>
+        <p class="text-slate-400 text-xs leading-relaxed">{t.raft.candidate_desc}</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="max-w-4xl mx-auto px-4 py-6">
+    <h2 class="text-2xl font-bold text-white mb-4">{t.raft.terms_h2}</h2>
+    <p class="text-slate-400 mb-4 leading-relaxed" set:html={t.raft.terms_p} />
+    <div class="bg-slate-900 rounded-xl border border-slate-700 p-5 font-mono text-sm overflow-x-auto">
+      <svg viewBox="0 0 500 60" class="w-full" style="height:60px">
+        <rect x="0" y="10" width="130" height="30" rx="4" fill="#4f46e5" opacity="0.7"/>
+        <text x="65" y="30" text-anchor="middle" fill="white" font-size="11" font-family="monospace">Term 1 — Leader: N1</text>
+        <rect x="134" y="10" width="50" height="30" rx="4" fill="#7f1d1d" opacity="0.7"/>
+        <text x="159" y="30" text-anchor="middle" fill="#fca5a5" font-size="10" font-family="monospace">T2 split</text>
+        <rect x="188" y="10" width="150" height="30" rx="4" fill="#4f46e5" opacity="0.7"/>
+        <text x="263" y="30" text-anchor="middle" fill="white" font-size="11" font-family="monospace">Term 3 — Leader: N3</text>
+        <rect x="342" y="10" width="110" height="30" rx="4" fill="#4f46e5" opacity="0.7"/>
+        <text x="397" y="30" text-anchor="middle" fill="white" font-size="11" font-family="monospace">Term 4 — N2</text>
+        <text x="460" y="32" fill="#475569" font-size="10" font-family="monospace">→ time</text>
+      </svg>
+    </div>
+  </section>
+
+  <!-- Leader Election -->
+  <section id="leader-election" class="max-w-4xl mx-auto px-4 py-10">
+    <div class="flex items-center gap-3 mb-4">
+      <span class="px-2 py-1 bg-emerald-900/40 text-emerald-400 text-xs font-mono rounded">{t.raft.election_phase}</span>
+      <h2 class="text-2xl font-bold text-white">{t.raft.election_h2}</h2>
+    </div>
+    <div class="space-y-3 mb-8 text-slate-400 leading-relaxed text-sm">
+      {t.raft.election_steps.map(step => <p set:html={step} />)}
+    </div>
+    <div class="bg-slate-900 rounded-2xl border border-slate-700 p-6 flex flex-col gap-4" data-cluster-root>
+      <div class="flex items-center justify-between">
+        <h3 class="font-semibold text-white text-sm">{t.raft.election_demo_title}</h3>
+        <div class="flex gap-2">
+          <button data-cluster="election" data-action="election" class="px-3 py-1.5 text-xs font-mono bg-emerald-900/50 hover:bg-emerald-800/60 text-emerald-300 rounded-lg border border-emerald-700/40 transition">{t.cluster.election}</button>
+          <button data-cluster="election" data-action="kill" class="px-3 py-1.5 text-xs font-mono bg-red-900/50 hover:bg-red-800/60 text-red-300 rounded-lg border border-red-700/40 transition">{t.cluster.kill}</button>
+          <button data-cluster="election" data-action="reset" class="px-3 py-1.5 text-xs font-mono bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition">{t.cluster.reset}</button>
+        </div>
+      </div>
+      <svg id="svg-election" viewBox="0 0 600 280" class="w-full" style="height:280px" data-cluster="election" data-node-count="5">
+        <g id="edges-election"></g><g id="nodes-election"></g><g id="packets-election"></g>
+      </svg>
+      <div id="log-election" class="font-mono text-xs text-slate-400 space-y-0.5 min-h-[48px] max-h-[80px] overflow-y-auto leading-5"></div>
+    </div>
+  </section>
+
+  <!-- Log Replication -->
+  <section id="log-replication" class="max-w-4xl mx-auto px-4 py-10">
+    <div class="flex items-center gap-3 mb-4">
+      <span class="px-2 py-1 bg-sky-900/40 text-sky-400 text-xs font-mono rounded">{t.raft.replication_phase}</span>
+      <h2 class="text-2xl font-bold text-white">{t.raft.replication_h2}</h2>
+    </div>
+    <div class="space-y-3 mb-8 text-slate-400 leading-relaxed text-sm">
+      {t.raft.replication_steps.map(step => <p set:html={step} />)}
+    </div>
+    <div class="bg-slate-900 rounded-2xl border border-slate-700 p-6 flex flex-col gap-4" data-cluster-root>
+      <div class="flex items-center justify-between">
+        <h3 class="font-semibold text-white text-sm">{t.raft.replication_demo_title}</h3>
+        <div class="flex gap-2">
+          <button data-cluster="replication" data-action="election" class="px-3 py-1.5 text-xs font-mono bg-emerald-900/50 hover:bg-emerald-800/60 text-emerald-300 rounded-lg border border-emerald-700/40 transition">{t.cluster.elect}</button>
+          <button data-cluster="replication" data-action="send" class="px-3 py-1.5 text-xs font-mono bg-sky-900/50 hover:bg-sky-800/60 text-sky-300 rounded-lg border border-sky-700/40 transition">{t.cluster.send}</button>
+          <button data-cluster="replication" data-action="reset" class="px-3 py-1.5 text-xs font-mono bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition">{t.cluster.reset}</button>
+        </div>
+      </div>
+      <svg id="svg-replication" viewBox="0 0 600 280" class="w-full" style="height:280px" data-cluster="replication" data-node-count="5">
+        <g id="edges-replication"></g><g id="nodes-replication"></g><g id="packets-replication"></g>
+      </svg>
+      <div id="log-replication" class="font-mono text-xs text-slate-400 space-y-0.5 min-h-[48px] max-h-[80px] overflow-y-auto leading-5"></div>
+    </div>
+  </section>
+
+  <!-- Safety -->
+  <section id="safety" class="max-w-4xl mx-auto px-4 py-10">
+    <div class="flex items-center gap-3 mb-4">
+      <span class="px-2 py-1 bg-red-900/40 text-red-400 text-xs font-mono rounded">{t.raft.safety_phase}</span>
+      <h2 class="text-2xl font-bold text-white">{t.raft.safety_h2}</h2>
+    </div>
+    <div class="space-y-3 mb-6">
+      {t.raft.safety_props.map(([title, desc]) => (
+        <div class="bg-slate-900 rounded-xl border border-slate-700 p-5">
+          <h4 class="font-semibold text-white mb-1">{title}</h4>
+          <p class="text-slate-400 text-sm">{desc}</p>
+        </div>
+      ))}
+    </div>
+    <div class="bg-amber-900/20 border border-amber-700/40 rounded-xl p-5">
+      <h4 class="font-semibold text-amber-400 mb-2">{t.raft.not_guaranteed_title}</h4>
+      <ul class="text-slate-400 text-sm space-y-1 list-disc list-inside">
+        {t.raft.not_guaranteed.map(item => <li>{item}</li>)}
+      </ul>
+    </div>
+  </section>
+
+  <section class="max-w-4xl mx-auto px-4 py-12">
+    <div class="flex justify-between items-center">
+      <a href={lp('/problem')} class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition text-sm">{t.raft.prev}</a>
+      <a href={lp('/in-the-wild')} class="px-6 py-3 bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg transition">{t.raft.next}</a>
+    </div>
+  </section>
+</Base>
+
+<script>
+  import { initClusters } from '../../scripts/raft-cluster';
+  initClusters();
+</script>

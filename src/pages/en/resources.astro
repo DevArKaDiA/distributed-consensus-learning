@@ -1,0 +1,148 @@
+---
+const lang = 'en';
+import { useTranslations } from '../../i18n';
+const t = useTranslations('en');
+import Base from '../../layouts/Base.astro';
+const base = import.meta.env.BASE_URL;
+---
+import { useTranslations } from '../../i18n';
+const t = useTranslations('en');
+<Base title="Resources" lang={lang} description="Papers, visualizations, libraries, and further reading on Raft and distributed consensus.">
+
+  <section class="max-w-4xl mx-auto px-4 pt-16 pb-8">
+    <p class="text-sky-400 text-sm font-mono mb-3">Chapter 5</p>
+    <h1 class="text-4xl font-bold text-white mb-4">Resources</h1>
+    <p class="text-slate-400 text-lg">The essential reading list. Start with the paper.</p>
+  </section>
+
+  <!-- Papers -->
+  <section class="max-w-4xl mx-auto px-4 py-6">
+    <h2 class="text-xl font-bold text-white mb-4">Papers</h2>
+    <div class="space-y-3">
+      {[
+        {
+          title: 'In Search of an Understandable Consensus Algorithm (Extended Version)',
+          authors: 'Diego Ongaro, John Ousterhout — Stanford, 2014',
+          desc: 'The original Raft paper. Surprisingly readable. Section 5 is the algorithm; section 9 is the formal proof. Read this.',
+          url: 'https://raft.github.io/raft.pdf',
+          badge: 'Must read',
+          badgeColor: 'bg-sky-900 text-sky-300 border-sky-700',
+        },
+        {
+          title: 'Paxos Made Simple',
+          authors: 'Leslie Lamport — Microsoft Research, 2001',
+          desc: "Lamport's attempt to simplify his own original Paxos paper. Still hard. Read after Raft to appreciate what Raft solved.",
+          url: 'https://lamport.azurewebsites.net/pubs/paxos-simple.pdf',
+          badge: 'Context',
+          badgeColor: 'bg-slate-800 text-slate-300 border-slate-600',
+        },
+        {
+          title: 'Impossibility of Distributed Consensus with One Faulty Process (FLP)',
+          authors: 'Fischer, Lynch, Paterson — 1985',
+          desc: 'The impossibility result: no deterministic async algorithm can guarantee consensus with even one faulty process. Explains why timeouts are necessary.',
+          url: 'https://groups.csail.mit.edu/tds/papers/Lynch/jacm85.pdf',
+          badge: 'Theory',
+          badgeColor: 'bg-slate-800 text-slate-300 border-slate-600',
+        },
+        {
+          title: "Diego Ongaro's PhD Dissertation — Consensus: Bridging Theory and Practice",
+          authors: 'Diego Ongaro — Stanford, 2014',
+          desc: 'The extended version of the Raft work. Covers cluster membership changes, log compaction, and client interaction in much more depth.',
+          url: 'https://web.stanford.edu/~ouster/cgi-bin/papers/OngaroPhD.pdf',
+          badge: 'Deep dive',
+          badgeColor: 'bg-slate-800 text-slate-300 border-slate-600',
+        },
+      ].map(r => (
+        <a href={r.url} target="_blank"
+           class="group flex gap-4 bg-slate-900 hover:bg-slate-800 rounded-xl border border-slate-700 p-5 transition">
+          <div class="flex-1">
+            <div class="flex items-start gap-2 mb-1">
+              <h3 class="font-semibold text-white group-hover:text-sky-400 transition text-sm leading-snug">{r.title} ↗</h3>
+              <span class={`shrink-0 px-2 py-0.5 text-xs rounded border ${r.badgeColor}`}>{r.badge}</span>
+            </div>
+            <p class="text-slate-500 text-xs mb-2">{r.authors}</p>
+            <p class="text-slate-400 text-xs leading-relaxed">{r.desc}</p>
+          </div>
+        </a>
+      ))}
+    </div>
+  </section>
+
+  <!-- Visualizations -->
+  <section class="max-w-4xl mx-auto px-4 py-6">
+    <h2 class="text-xl font-bold text-white mb-4">Visualizations & Interactive Tools</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      {[
+        {
+          name: 'The Secret Lives of Data',
+          url: 'https://thesecretlivesofdata.com/raft/',
+          desc: 'Animated step-by-step walkthrough of Raft. Best introduction if you prefer visuals first.',
+        },
+        {
+          name: 'Raft Scope (official)',
+          url: 'https://raft.github.io/',
+          desc: 'Official Raft website with an interactive cluster visualization. Run elections, send messages, kill nodes.',
+        },
+        {
+          name: 'Raft Visualization — Ben Johnson',
+          url: 'https://raft.github.io/raftscope/index.html',
+          desc: 'Step through Raft log replication event by event. Great for debugging your mental model.',
+        },
+        {
+          name: 'TLA+ spec for Raft',
+          url: 'https://github.com/ongardie/raft.tla',
+          desc: "Ongaro's TLA+ formal specification. If you want mathematical proof that your understanding is correct.",
+        },
+      ].map(v => (
+        <a href={v.url} target="_blank"
+           class="group bg-slate-900 hover:bg-slate-800 rounded-xl border border-slate-700 p-4 transition">
+          <h3 class="font-semibold text-white group-hover:text-sky-400 transition text-sm mb-1">{v.name} ↗</h3>
+          <p class="text-slate-400 text-xs leading-relaxed">{v.desc}</p>
+        </a>
+      ))}
+    </div>
+  </section>
+
+  <!-- Libraries -->
+  <section class="max-w-4xl mx-auto px-4 py-6">
+    <h2 class="text-xl font-bold text-white mb-4">Production Libraries</h2>
+    <div class="space-y-3">
+      {[
+        { name: 'hashicorp/raft', lang: 'Go', url: 'https://github.com/hashicorp/raft', desc: 'Used by Consul, Vault, Nomad. Battle-tested, well-documented, good starting point for Go services.' },
+        { name: 'etcd/raft', lang: 'Go', url: 'https://github.com/etcd-io/raft', desc: 'The Raft library extracted from etcd. Lower-level than hashicorp/raft; you bring your own storage and transport.' },
+        { name: 'openraft', lang: 'Rust', url: 'https://github.com/datafuselabs/openraft', desc: 'Modern async Rust Raft. Used in DataFuse. Strong typing, async-first, extensive documentation.' },
+        { name: 'dragonboat', lang: 'Go', url: 'https://github.com/lni/dragonboat', desc: 'High-performance multi-Raft library. Good if you need thousands of Raft groups like CockroachDB.' },
+        { name: 'ratis', lang: 'Java', url: 'https://ratis.apache.org/', desc: 'Apache Ratis — used by Apache Ozone and other Hadoop ecosystem projects.' },
+      ].map(l => (
+        <a href={l.url} target="_blank"
+           class="group flex items-start gap-4 bg-slate-900 hover:bg-slate-800 rounded-xl border border-slate-700 p-4 transition">
+          <span class="px-2 py-1 bg-slate-800 text-slate-300 text-xs font-mono rounded border border-slate-600 shrink-0">{l.lang}</span>
+          <div>
+            <h3 class="font-semibold text-white group-hover:text-sky-400 transition text-sm font-mono">{l.name} ↗</h3>
+            <p class="text-slate-400 text-xs leading-relaxed mt-1">{l.desc}</p>
+          </div>
+        </a>
+      ))}
+    </div>
+  </section>
+
+  <!-- Talk -->
+  <section class="max-w-4xl mx-auto px-4 py-6">
+    <h2 class="text-xl font-bold text-white mb-4">Talks</h2>
+    <a href="https://www.youtube.com/watch?v=vYp4LYbnnW8" target="_blank"
+       class="group flex gap-4 bg-slate-900 hover:bg-slate-800 rounded-xl border border-slate-700 p-5 transition">
+      <div class="text-3xl">🎬</div>
+      <div>
+        <h3 class="font-semibold text-white group-hover:text-sky-400 transition mb-1">Designing for Understandability: The Raft Consensus Algorithm ↗</h3>
+        <p class="text-slate-500 text-xs mb-2">Diego Ongaro — 2016</p>
+        <p class="text-slate-400 text-xs">45-minute talk by the author. Covers motivation, the algorithm, and lessons learned from building etcd.</p>
+      </div>
+    </a>
+  </section>
+
+  <section class="max-w-4xl mx-auto px-4 py-12">
+    <div class="flex justify-start">
+      <a href={`${base}/code`} class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition text-sm">← Code</a>
+    </div>
+  </section>
+</Base>

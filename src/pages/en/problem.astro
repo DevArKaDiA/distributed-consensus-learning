@@ -1,0 +1,92 @@
+---
+import Base from '../../layouts/Base.astro';
+import { useTranslations, localePath } from '../../i18n';
+const lang = 'en';
+const t = useTranslations(lang);
+const base = import.meta.env.BASE_URL;
+const lp = (path: string) => localePath(lang, path, base);
+---
+<Base title={t.problem.h1} {lang} currentPath="/problem">
+  <section class="max-w-4xl mx-auto px-4 pt-16 pb-8">
+    <p class="text-sky-400 text-sm font-mono mb-3">{t.problem.chapter}</p>
+    <h1 class="text-4xl font-bold text-white mb-4">{t.problem.h1}</h1>
+    <p class="text-slate-400 text-lg">{t.problem.intro}</p>
+  </section>
+
+  <section class="max-w-4xl mx-auto px-4 py-8">
+    <h2 class="text-2xl font-bold text-white mb-4">{t.problem.setup_h2}</h2>
+    <p class="text-slate-400 mb-4 leading-relaxed">{t.problem.setup_p}</p>
+    <div class="bg-slate-900 rounded-xl border border-slate-700 p-6 font-mono text-sm mb-4">
+      <div class="text-slate-500 mb-2"># client writes</div>
+      <div class="text-green-400">SET x = 1   →   [S1, S2, S3]</div>
+      <div class="text-green-400">SET x = 2   →   [S1, S2, S3]</div>
+      <div class="text-slate-400 mt-3 mb-1"># client reads from any server</div>
+      <div class="text-sky-400">GET x from S2  →  2 ✓</div>
+    </div>
+    <p class="text-slate-400 leading-relaxed">{t.problem.setup_looks}</p>
+  </section>
+
+  <section class="max-w-4xl mx-auto px-4 py-8">
+    <h2 class="text-2xl font-bold text-white mb-6">{t.problem.wrong_h2}</h2>
+    <div class="space-y-4">
+      {t.problem.wrong.map(w => (
+        <div class="bg-slate-900 rounded-xl border border-red-900/40 p-6">
+          <h3 class="font-semibold text-red-400 mb-2">{w.title}</h3>
+          <p class="text-slate-400 text-sm leading-relaxed">{w.body}</p>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <section class="max-w-4xl mx-auto px-4 py-8">
+    <h2 class="text-2xl font-bold text-white mb-4">{t.problem.core_h2}</h2>
+    <p class="text-slate-400 mb-6 leading-relaxed" set:html={t.problem.core_p} />
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div class="bg-slate-900 rounded-xl border border-slate-700 p-5">
+        <h4 class="font-semibold text-white mb-2">{t.problem.safety_title}</h4>
+        <p class="text-slate-400 text-sm">{t.problem.safety_p}</p>
+      </div>
+      <div class="bg-slate-900 rounded-xl border border-slate-700 p-5">
+        <h4 class="font-semibold text-white mb-2">{t.problem.liveness_title}</h4>
+        <p class="text-slate-400 text-sm">{t.problem.liveness_p}</p>
+      </div>
+    </div>
+    <div class="bg-amber-900/20 border border-amber-700/40 rounded-xl p-5">
+      <h4 class="font-semibold text-amber-400 mb-2">{t.problem.flp_title}</h4>
+      <p class="text-slate-400 text-sm leading-relaxed" set:html={t.problem.flp_body} />
+    </div>
+  </section>
+
+  <section class="max-w-4xl mx-auto px-4 py-8">
+    <h2 class="text-2xl font-bold text-white mb-4">{t.problem.cap_h2}</h2>
+    <p class="text-slate-400 mb-6">{t.problem.cap_p}</p>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div class="bg-slate-900 rounded-xl border border-slate-700 p-5 text-center">
+        <div class="text-3xl mb-2">✅</div>
+        <h4 class="font-semibold text-white mb-1">{t.problem.cap_c_title}</h4>
+        <p class="text-slate-400 text-xs">{t.problem.cap_c}</p>
+      </div>
+      <div class="bg-slate-900 rounded-xl border border-slate-700 p-5 text-center">
+        <div class="text-3xl mb-2">📡</div>
+        <h4 class="font-semibold text-white mb-1">{t.problem.cap_a_title}</h4>
+        <p class="text-slate-400 text-xs">{t.problem.cap_a}</p>
+      </div>
+      <div class="bg-slate-900 rounded-xl border border-slate-700 p-5 text-center">
+        <div class="text-3xl mb-2">🔀</div>
+        <h4 class="font-semibold text-white mb-1">{t.problem.cap_p_title}</h4>
+        <p class="text-slate-400 text-xs">{t.problem.cap_p2}</p>
+      </div>
+    </div>
+    <div class="bg-slate-900 rounded-xl border border-sky-800/50 p-5">
+      <p class="text-slate-400 text-sm leading-relaxed" set:html={t.problem.cap_raft} />
+    </div>
+  </section>
+
+  <section class="max-w-4xl mx-auto px-4 py-12">
+    <div class="flex justify-end">
+      <a href={lp('/raft')} class="px-6 py-3 bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg transition">
+        {t.problem.next}
+      </a>
+    </div>
+  </section>
+</Base>

@@ -1,0 +1,137 @@
+export const en = {
+  // Nav
+  nav: {
+    problem: 'The Problem',
+    raft: 'Raft',
+    wild: 'In the Wild',
+    code: 'Code',
+    resources: 'Resources',
+  },
+
+  // Home
+  home: {
+    badge: 'Distributed Systems · Consensus · Raft',
+    h1a: 'How do distributed systems',
+    h1b: 'agree on anything?',
+    subtitle: 'When multiple servers need to share state, any one of them can fail at any time. Consensus algorithms solve this. Raft is the one you can actually understand.',
+    cta_problem: 'Start from the problem →',
+    cta_raft: 'Jump to Raft',
+    demo_label: 'live demo — 5-node Raft cluster',
+    legend_follower: 'follower',
+    legend_candidate: 'candidate',
+    legend_leader: 'leader',
+    legend_dead: 'dead',
+    learn_title: "What you'll learn",
+    cards: [
+      { icon: '⚡', title: 'The Problem', desc: 'Why distributed consensus is hard: network partitions, node failures, and split-brain scenarios.' },
+      { icon: '🗳️', title: 'How Raft Works', desc: 'Leader election, log replication, and safety — with interactive SVG animations for each phase.' },
+      { icon: '🌍', title: 'Real-world Usage', desc: 'etcd, CockroachDB, TiKV, Consul, Kafka KRaft — why they chose Raft and what it buys them.' },
+      { icon: '💻', title: 'Code', desc: 'Minimal implementations in Python, TypeScript, Go, and Rust — readable and annotated.' },
+      { icon: '📐', title: 'Guarantees', desc: "What Raft actually guarantees and what it doesn't. CAP, linearizability, liveness." },
+      { icon: '📚', title: 'Resources', desc: 'The original paper, TLA+ specs, visualization tools, and further reading.' },
+    ],
+    paxos_title: 'Why Raft, not Paxos?',
+    paxos_body: 'Paxos was the dominant consensus algorithm for decades but is notoriously hard to understand and implement correctly. Raft was designed explicitly for <strong>understandability</strong> — its authors ran studies showing students learn it significantly faster. That\'s why so much modern infrastructure chooses Raft.',
+  },
+
+  // Cluster buttons
+  cluster: {
+    election: 'Start Election',
+    kill: 'Kill Leader',
+    send: 'Send Command',
+    reset: 'Reset',
+    elect: 'Elect Leader',
+  },
+
+  // Problem page
+  problem: {
+    chapter: 'Chapter 1',
+    h1: 'The Problem',
+    intro: 'Before understanding Raft, you need to feel the pain it solves.',
+    setup_h2: 'A simple distributed key-value store',
+    setup_p: "Imagine you're building a distributed key-value store. You run 3 servers so that if one crashes, the system keeps working. Every write goes to all 3 servers, every read can hit any of them.",
+    setup_looks: 'This looks fine — until things go wrong.',
+    wrong_h2: 'What can go wrong',
+    wrong: [
+      { title: '1. Node crash', color: 'red', body: 'S2 crashes mid-write. S1 and S3 wrote x=2, but S2 still has x=1. When S2 comes back, it serves stale data.' },
+      { title: '2. Network partition', color: 'orange', body: 'A switch fails and splits your cluster: {S1} on one side, {S2, S3} on the other. Both sides receive writes independently — this is called split-brain.' },
+      { title: '3. Slow messages', color: 'yellow', body: "A message takes 10 seconds to arrive. Is the node dead or just slow? You can't tell. If you assume dead and elect a new leader, you might end up with two active leaders." },
+    ],
+    core_h2: 'The core challenge: agreement under uncertainty',
+    core_p: 'The fundamental problem: <strong>multiple nodes must agree on a sequence of values, even when nodes fail and messages are delayed or lost.</strong> This is called consensus.',
+    safety_title: 'Safety (correctness)',
+    safety_p: 'Two nodes must never decide on different values for the same slot. No divergence, ever.',
+    liveness_title: 'Liveness (progress)',
+    liveness_p: 'If enough nodes are alive and can communicate, the system must eventually make progress.',
+    flp_title: 'FLP Impossibility (1985)',
+    flp_body: "Fischer, Lynch, and Paterson proved that in a fully asynchronous system, it is <strong>impossible</strong> to guarantee both safety and liveness. In practice, systems use <strong>timeouts</strong> — they assume a node is dead if it doesn't respond in time. Raft is built on this assumption.",
+    cap_h2: 'CAP Theorem',
+    cap_p: 'During a network partition, you must choose between:',
+    cap_c_title: 'Consistency', cap_c: 'Every read gets the most recent write or an error.',
+    cap_a_title: 'Availability', cap_a: 'Every request gets a response, even if stale.',
+    cap_p_title: 'Partition Tolerance', cap_p2: 'The system operates even if messages are lost.',
+    cap_raft: '<strong>Raft chooses CP</strong> — it sacrifices availability to guarantee consistency. If the cluster loses quorum, it stops accepting writes rather than risk inconsistency.',
+    next: 'Next: How Raft solves this →',
+  },
+
+  // Raft page
+  raft: {
+    chapter: 'Chapter 2',
+    h1: 'How Raft Works',
+    intro: 'Raft decomposes consensus into three sub-problems: leader election, log replication, and safety. Each is understandable in isolation.',
+    insight_title: 'Core insight: strong leader',
+    insight_body: 'Raft uses a <strong>strong leader model</strong>. One node is the authoritative leader at all times. All writes go through the leader. This simplifies design enormously.',
+    states_h2: 'Server states',
+    leader_title: 'Leader', leader_desc: 'Handles all client requests. Replicates log entries to followers. Sends heartbeats to prevent new elections.',
+    follower_title: 'Follower', follower_desc: 'Passive. Responds to leaders and candidates. Becomes a candidate if it hears nothing within the election timeout.',
+    candidate_title: 'Candidate', candidate_desc: 'Trying to become leader. Requests votes from other nodes. Becomes leader if it wins a majority.',
+    terms_h2: 'Terms: logical time',
+    terms_p: 'Raft divides time into <strong>terms</strong> — monotonically increasing integers. Each term begins with an election. Nodes with a stale term immediately revert to follower.',
+    election_phase: 'Phase 1',
+    election_h2: 'Leader Election',
+    election_steps: [
+      '<strong>1. Heartbeat timeout.</strong> Each follower has an election timeout (randomized, 150–300ms). No heartbeat → starts an election.',
+      '<strong>2. Become candidate.</strong> Increments its term, votes for itself, sends RequestVote to all peers.',
+      '<strong>3. Vote rules.</strong> A node grants its vote if: (a) hasn\'t voted in this term, and (b) candidate\'s log is at least as up-to-date.',
+      '<strong>4. Win majority.</strong> ⌊n/2⌋ + 1 votes → becomes leader, sends heartbeats immediately.',
+      '<strong>5. Randomized timeouts</strong> prevent split votes — two nodes rarely start elections at the exact same millisecond.',
+    ],
+    election_demo_title: 'Interactive: Leader Election',
+    replication_phase: 'Phase 2',
+    replication_h2: 'Log Replication',
+    replication_steps: [
+      '<strong>The replicated log.</strong> Each Raft node keeps an ordered log of commands. The goal is identical logs across all nodes.',
+      '<strong>1. Client → leader.</strong> Client sends a command (e.g. SET x=5). Followers redirect to the leader.',
+      '<strong>2. Append entry.</strong> Leader appends it to its log with the current term number.',
+      '<strong>3. AppendEntries RPCs.</strong> Leader sends the new entry to all followers in parallel.',
+      '<strong>4. Commit on majority.</strong> Once a majority ACKs, the leader marks it committed and applies it to its state machine.',
+      '<strong>5. Consistency check.</strong> Each AppendEntries includes the previous entry\'s index + term. Mismatches are rejected — logs never diverge.',
+    ],
+    replication_demo_title: 'Interactive: Log Replication',
+    safety_phase: 'Phase 3',
+    safety_h2: 'Safety Guarantees',
+    safety_props: [
+      ['Election Safety', 'At most one leader per term. Two majorities always share at least one node, which can only vote once per term.'],
+      ['Leader Append-Only', 'A leader never overwrites its log — only appends. Committed entries are permanent.'],
+      ['Log Matching', 'If two logs share an entry at the same index + term, all preceding entries are identical.'],
+      ['Leader Completeness', 'A leader always has all committed entries. The vote rule ensures nodes that missed entries can never win.'],
+      ['State Machine Safety', 'No two nodes ever apply different commands at the same log index.'],
+    ],
+    not_guaranteed_title: "What Raft does NOT guarantee",
+    not_guaranteed: [
+      'No progress if majority of nodes are unreachable (CP, not AP — by design)',
+      'No protection against Byzantine faults (lying/corrupting nodes)',
+      'No low latency guarantee — a write needs at least 2 round-trips',
+    ],
+    prev: '← The Problem',
+    next: 'Next: In the Wild →',
+  },
+
+  // Footer
+  footer: {
+    built: 'Built to understand distributed systems',
+    paper: 'Raft paper',
+  },
+};
+
+export type Translations = typeof en;
