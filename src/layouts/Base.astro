@@ -22,11 +22,12 @@ const base = import.meta.env.BASE_URL;
 const altLang = getAlternateLang(lang);
 const altHref = localePath(altLang, currentPath, base);
 const navLinks = [
-  { key: 'problem', path: '/problem' },
-  { key: 'raft',    path: '/raft' },
-  { key: 'wild',    path: '/in-the-wild' },
-  { key: 'code',    path: '/code' },
-  { key: 'resources', path: '/resources' },
+  { key: 'problem',    path: '/problem' },
+  { key: 'raft',       path: '/raft' },
+  { key: 'wild',       path: '/in-the-wild' },
+  { key: 'code',       path: '/code' },
+  { key: 'resources',  path: '/resources' },
+  { key: 'visualizer', path: '/visualizer' },
 ] as const;
 ---
 <!doctype html>

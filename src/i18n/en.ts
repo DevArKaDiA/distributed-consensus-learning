@@ -6,6 +6,7 @@ export const en = {
     wild: 'In the Wild',
     code: 'Code',
     resources: 'Resources',
+    visualizer: 'Visualizer',
   },
 
   // Home
@@ -125,6 +126,44 @@ export const en = {
     ],
     prev: '← The Problem',
     next: 'Next: In the Wild →',
+  },
+
+  // Visualizer page
+  visualizer: {
+    title: 'Raft Visualizer',
+    subtitle: 'Step through a live Raft simulation. Watch elections, log replication, and failure recovery in real time.',
+    scenario_label: 'Scenario',
+    scenarios: {
+      normal: 'Normal Operation',
+      leader_crash: 'Leader Crash',
+      partition: 'Network Partition',
+      split_vote: 'Split Vote',
+    },
+    play: 'Play',
+    pause: 'Pause',
+    step_back: '← Step Back',
+    step_fwd: 'Step Fwd →',
+    speed: 'Speed',
+    reset: 'Reset',
+    event_log_title: 'Event Log',
+    narration_title: 'What just happened',
+    narration_empty: 'Press Play or Step Forward to start the simulation.',
+    node_detail_title: 'Node Detail',
+    node_detail_empty: 'Click a node to inspect its state.',
+    node_state: 'State',
+    node_term: 'Term',
+    node_voted_for: 'Voted For',
+    node_commit_idx: 'Commit Index',
+    node_log: 'Log Entries',
+    log_empty: '(empty log)',
+    committed: 'committed',
+    pending: 'pending',
+    event_at: 'at',
+    legend: 'Legend',
+    legend_follower: 'Follower',
+    legend_candidate: 'Candidate',
+    legend_leader: 'Leader',
+    legend_dead: 'Dead',
   },
 
   // Footer
