@@ -1,7 +1,9 @@
 ---
 import Base from '../../layouts/Base.astro';
+import { localePath } from '../../i18n';
 const lang = 'es';
 const base = import.meta.env.BASE_URL;
+const lp = (path: string) => localePath(lang, path, base);
 
 // Minimal Raft implementations — readable, annotated, not production-ready
 const pythonCode = `# raft.py — Minimal Raft node (single-process simulation)
@@ -982,8 +984,8 @@ fn main() {
 
   <section class="max-w-4xl mx-auto px-4 py-6">
     <div class="flex justify-between items-center">
-      <a href={`${base}/in-the-wild`} class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition text-sm">← In the Wild</a>
-      <a href={`${base}/resources`} class="px-6 py-3 bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg transition">Next: Resources →</a>
+      <a href={lp('/in-the-wild')} class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition text-sm">← En Producción</a>
+      <a href={lp('/resources')} class="px-6 py-3 bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg transition">Siguiente: Recursos →</a>
     </div>
   </section>
 </Base>

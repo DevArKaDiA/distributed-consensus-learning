@@ -1,9 +1,10 @@
 ---
 const lang = 'es';
-import { useTranslations } from '../../i18n';
+import { useTranslations, localePath } from '../../i18n';
 const t = useTranslations('en');
 import Base from '../../layouts/Base.astro';
 const base = import.meta.env.BASE_URL;
+const lp = (path: string) => localePath(lang, path, base);
 
 const systems = [
   {
@@ -171,8 +172,8 @@ const t = useTranslations('en');
 
   <section class="max-w-4xl mx-auto px-4 py-6">
     <div class="flex justify-between items-center">
-      <a href={`${base}/raft`} class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition text-sm">← How Raft Works</a>
-      <a href={`${base}/code`} class="px-6 py-3 bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg transition">Next: Code →</a>
+      <a href={lp('/raft')} class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition text-sm">← Cómo funciona Raft</a>
+      <a href={lp('/code')} class="px-6 py-3 bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg transition">Siguiente: Código →</a>
     </div>
   </section>
 </Base>

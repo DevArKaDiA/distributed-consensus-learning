@@ -1,9 +1,10 @@
 ---
 const lang = 'es';
-import { useTranslations } from '../../i18n';
+import { useTranslations, localePath } from '../../i18n';
 const t = useTranslations('en');
 import Base from '../../layouts/Base.astro';
 const base = import.meta.env.BASE_URL;
+const lp = (path: string) => localePath(lang, path, base);
 ---
 <Base title="Resources" lang={lang} description="Papers, visualizations, libraries, and further reading on Raft and distributed consensus.">
 
@@ -152,7 +153,7 @@ const base = import.meta.env.BASE_URL;
 
   <section class="max-w-4xl mx-auto px-4 py-12">
     <div class="flex justify-start">
-      <a href={`${base}/code`} class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition text-sm">← Code</a>
+      <a href={lp('/code')} class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition text-sm">← Código</a>
     </div>
   </section>
 </Base>
