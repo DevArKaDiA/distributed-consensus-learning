@@ -503,6 +503,13 @@ function splitVoteScenario(nodeCount = 5): SimEvent[] {
   const events: SimEvent[] = [];
   let t = 0;
   const cluster = initCluster(nodeCount);
+  const majority = Math.floor(nodeCount / 2) + 1;
+  const allIds = cluster.nodes.map(n => n.id);
+  // Use N2 and (last node or N4) as the two competing candidates
+  const cand1 = 2;
+  const cand2 = Math.min(4, nodeCount); // N4 or last node if fewer
+  const othersForCand1 = allIds.filter(id => id !== cand1 && id !== cand2).slice(0, majority - 1);
+  const othersForCand2 = allIds.filter(id => id !== cand1 && id !== cand2 && !othersForCand1.includes(id));
 
   const tick = (ms: number) => { t += ms; };
   const emit = (type: EventType, fields: Partial<SimEvent>, en: string, es: string) => {
@@ -517,103 +524,94 @@ function splitVoteScenario(nodeCount = 5): SimEvent[] {
     "No hay líder. Todos los nodos son seguidores esperando una elección. Sus temporizadores corren simultáneamente — está a punto de producirse un voto dividido porque dos nodos tienen timeouts casi idénticos."
   );
 
-  // N2 and N4 start elections at nearly the same time
+  // cand1 starts election
   tick(150);
-  cluster.nodes[1].state = 'candidate';
-  cluster.nodes[1].term = 2;
-  cluster.nodes[1].votedFor = 2;
+  cluster.nodes[cand1 - 1].state = 'candidate';
+  cluster.nodes[cand1 - 1].term = 2;
+  cluster.nodes[cand1 - 1].votedFor = cand1;
   cluster.term = 2;
-  emit('election_timeout', { nodeId: 2, term: 2 },
-    "N2's timer fires at 150ms. It becomes a candidate for term 2 and sends RequestVote to N1, N3, N4, N5.",
-    "El temporizador de N2 expira a los 150ms. Se convierte en candidato para el término 2 y envía RequestVote a N1, N3, N4, N5."
+  emit('election_timeout', { nodeId: cand1, term: 2 },
+    `N${cand1}'s timer fires at 150ms. It becomes a candidate for term 2 and sends RequestVote to peers.`,
+    `El temporizador de N${cand1} expira a los 150ms. Se convierte en candidato para el término 2 y envía RequestVote a los pares.`
   );
 
-  tick(5); // Almost simultaneous
-  cluster.nodes[3].state = 'candidate';
-  cluster.nodes[3].term = 2;
-  cluster.nodes[3].votedFor = 4;
-  emit('election_timeout', { nodeId: 4, term: 2 },
-    "Just 5ms later, N4's timer also fires. It becomes a candidate for the same term 2. Two candidates are now competing simultaneously — a split vote scenario.",
-    "Solo 5ms después, el temporizador de N4 también expira. Se convierte en candidato para el mismo término 2. Dos candidatos compiten simultáneamente — un escenario de voto dividido."
+  // cand2 starts election almost simultaneously
+  tick(5);
+  cluster.nodes[cand2 - 1].state = 'candidate';
+  cluster.nodes[cand2 - 1].term = 2;
+  cluster.nodes[cand2 - 1].votedFor = cand2;
+  emit('election_timeout', { nodeId: cand2, term: 2 },
+    `Just 5ms later, N${cand2}'s timer also fires. It becomes a candidate for the same term 2. Two candidates are now competing — a split vote scenario.`,
+    `Solo 5ms después, el temporizador de N${cand2} también expira. Se convierte en candidato para el mismo término 2. Dos candidatos compiten — un escenario de voto dividido.`
   );
 
-  // N2 sends vote requests
-  for (const id of [1, 3]) {
+  // cand1 sends vote requests to its targets
+  for (const id of othersForCand1) {
     tick(8);
-    emit('request_vote', { from: 2, to: id, term: 2 },
-      `N2 requests a vote from N${id}. N2's message arrives before N4's.`,
-      `N2 solicita el voto de N${id}. El mensaje de N2 llega antes que el de N4.`
+    emit('request_vote', { from: cand1, to: id, term: 2 },
+      `N${cand1} requests a vote from N${id}. N${cand1}'s message arrives before N${cand2}'s.`,
+      `N${cand1} solicita el voto de N${id}. El mensaje de N${cand1} llega antes que el de N${cand2}.`
     );
   }
 
-  // N4 sends vote requests
-  for (const id of [5]) {
+  // cand2 sends vote requests to its targets
+  for (const id of othersForCand2) {
     tick(8);
-    emit('request_vote', { from: 4, to: id, term: 2 },
-      `N4 requests a vote from N5. N4's message arrives before N2's.`,
-      `N4 solicita el voto de N5. El mensaje de N4 llega antes que el de N2.`
+    emit('request_vote', { from: cand2, to: id, term: 2 },
+      `N${cand2} requests a vote from N${id}. N${cand2}'s message arrives before N${cand1}'s.`,
+      `N${cand2} solicita el voto de N${id}. El mensaje de N${cand2} llega antes que el de N${cand1}.`
     );
   }
 
-  // N1 votes for N2 (received N2's request first)
-  tick(20);
-  cluster.nodes[0].votedFor = 2;
-  cluster.nodes[0].term = 2;
-  emit('vote_granted', { from: 1, to: 2, term: 2 },
-    "N1 votes for N2 — it received N2's request first and hasn't voted yet in term 2.",
-    "N1 vota por N2 — recibió la solicitud de N2 primero y aún no ha votado en el término 2."
-  );
+  // cand1's voters respond
+  for (const id of othersForCand1) {
+    tick(15);
+    cluster.nodes[id - 1].votedFor = cand1;
+    cluster.nodes[id - 1].term = 2;
+    emit('vote_granted', { from: id, to: cand1, term: 2 },
+      `N${id} votes for N${cand1} — it received N${cand1}'s request first and hasn't voted yet in term 2.`,
+      `N${id} vota por N${cand1} — recibió la solicitud de N${cand1} primero y aún no ha votado en el término 2.`
+    );
+  }
 
-  // N3 votes for N2
+  // cand2's voters respond
+  for (const id of othersForCand2) {
+    tick(15);
+    cluster.nodes[id - 1].votedFor = cand2;
+    cluster.nodes[id - 1].term = 2;
+    emit('vote_granted', { from: id, to: cand2, term: 2 },
+      `N${id} votes for N${cand2} — it received N${cand2}'s request first. N${cand2} has ${othersForCand2.length + 1} votes so far, not yet a majority.`,
+      `N${id} vota por N${cand2} — recibió la solicitud de N${cand2} primero. N${cand2} tiene ${othersForCand2.length + 1} votos, aún no es mayoría.`
+    );
+  }
+
+  // cand2 asks cand1's voters but gets denied
+  for (const id of othersForCand1) {
+    tick(12);
+    emit('vote_denied', { from: id, to: cand2, term: 2 },
+      `N${cand2} asks N${id} for a vote, but N${id} already voted for N${cand1} in term 2. Vote denied — each node gets exactly one vote per term.`,
+      `N${cand2} le pide el voto a N${id}, pero N${id} ya votó por N${cand1} en el término 2. Voto denegado — cada nodo tiene exactamente un voto por término.`
+    );
+  }
+
+  // cand1 wins
   tick(10);
-  cluster.nodes[2].votedFor = 2;
-  cluster.nodes[2].term = 2;
-  emit('vote_granted', { from: 3, to: 2, term: 2 },
-    "N3 also votes for N2. N2 now has 3 votes: itself + N1 + N3. But wait — N4 also needs votes.",
-    "N3 también vota por N2. N2 tiene ahora 3 votos: él mismo + N1 + N3. Pero N4 también necesita votos."
-  );
-
-  // N5 votes for N4
-  tick(15);
-  cluster.nodes[4].votedFor = 4;
-  cluster.nodes[4].term = 2;
-  emit('vote_granted', { from: 5, to: 4, term: 2 },
-    "N5 votes for N4 — it received N4's request first. N4 has 2 votes so far (itself + N5), not yet a majority.",
-    "N5 vota por N4 — recibió la solicitud de N4 primero. N4 tiene 2 votos hasta ahora (él mismo + N5), aún no es mayoría."
-  );
-
-  // N4 requests N1, N3 — but they already voted for N2
-  tick(15);
-  emit('vote_denied', { from: 1, to: 4, term: 2 },
-    "N4 asks N1 for a vote, but N1 already voted for N2 in term 2. Vote denied — each node gets exactly one vote per term.",
-    "N4 le pide el voto a N1, pero N1 ya votó por N2 en el término 2. Voto denegado — cada nodo tiene exactamente un voto por término."
-  );
-
-  tick(10);
-  emit('vote_denied', { from: 3, to: 4, term: 2 },
-    "N4 asks N3 — also denied. N3 already voted for N2. N4 cannot win this election. N2 wins with 3 votes: N2 + N1 + N3.",
-    "N4 le pide a N3 — también denegado. N3 ya votó por N2. N4 no puede ganar esta elección. N2 gana con 3 votos: N2 + N1 + N3."
-  );
-
-  // N2 wins
-  tick(10);
-  cluster.nodes[1].state = 'leader';
-  cluster.nodes[3].state = 'follower'; // N4 steps down
-  emit('leader_elected', { nodeId: 2, term: 2 },
-    "N2 wins the election with 3 votes (majority). N4 receives a heartbeat from N2 with a matching or higher term and steps down to follower. The split vote resolved because only N2 reached a strict majority first.",
-    "N2 gana la elección con 3 votos (mayoría). N4 recibe un heartbeat de N2 con término igual o mayor y pasa a seguidor. El voto dividido se resolvió porque solo N2 alcanzó la mayoría estricta primero."
+  cluster.nodes[cand1 - 1].state = 'leader';
+  cluster.nodes[cand2 - 1].state = 'follower'; // cand2 steps down
+  emit('leader_elected', { nodeId: cand1, term: 2 },
+    `N${cand1} wins the election with ${othersForCand1.length + 1} votes (majority). N${cand2} receives a heartbeat from N${cand1} with a matching or higher term and steps down. The split vote resolved because only N${cand1} reached a strict majority first.`,
+    `N${cand1} gana la elección con ${othersForCand1.length + 1} votos (mayoría). N${cand2} recibe un heartbeat de N${cand1} y pasa a seguidor. El voto dividido se resolvió porque solo N${cand1} alcanzó la mayoría estricta primero.`
   );
 
   // Heartbeats
-  for (const id of [1, 3, 4, 5]) {
+  for (const id of allIds.filter(id => id !== cand1)) {
     tick(15);
-    emit('heartbeat', { from: 2, to: id, term: 2 },
-      `N2 sends heartbeat to N${id}, establishing its authority. N4 accepts this as it has not yet won any election.`,
-      `N2 envía heartbeat a N${id}, estableciendo su autoridad. N4 lo acepta ya que no ha ganado ninguna elección.`
+    emit('heartbeat', { from: cand1, to: id, term: 2 },
+      `N${cand1} sends heartbeat to N${id}, establishing its authority. N${cand2} accepts this as it has not yet won any election.`,
+      `N${cand1} envía heartbeat a N${id}, estableciendo su autoridad. N${cand2} lo acepta ya que no ha ganado ninguna elección.`
     );
   }
 
-  // Note: If it had been a true split (e.g. 2-2 with 1 uncommitted), the scenario would retry
   tick(50);
   emit('election_timeout', { nodeId: 0, term: 2 },
     "In a true split vote (when votes tie and no one reaches majority), all candidates time out and restart in a new term with fresh random timeouts. The randomization ensures the deadlock resolves quickly.",

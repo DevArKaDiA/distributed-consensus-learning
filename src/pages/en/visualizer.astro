@@ -37,10 +37,10 @@ const tv = t.visualizer;
       <div class="flex items-center gap-2">
         <span class="text-slate-400 text-xs font-mono">{tv.speed}</span>
         <select id="sel-speed" class="bg-slate-800 border border-slate-600 text-slate-300 text-xs font-mono rounded-lg px-2 py-1">
+          <option value="0.25">0.25×</option>
           <option value="0.5">0.5×</option>
           <option value="1" selected>1×</option>
           <option value="2">2×</option>
-          <option value="4">4×</option>
         </select>
       </div>
 
@@ -58,6 +58,25 @@ const tv = t.visualizer;
         </select>
       </div>
 
+      <!-- Divider -->
+      <div class="w-px h-6 bg-slate-700 hidden sm:block"></div>
+
+      <!-- Node count controls -->
+      <div class="flex items-center gap-2">
+        <span class="text-slate-400 text-xs font-mono">Nodes</span>
+        <button id="btn-remove-node" class="px-2 py-1 text-xs font-mono bg-slate-700 hover:bg-slate-600 text-slate-300 rounded border border-slate-600 transition">− Node</button>
+        <span id="node-count-label" class="text-slate-300 text-xs font-mono w-4 text-center">5</span>
+        <button id="btn-add-node" class="px-2 py-1 text-xs font-mono bg-slate-700 hover:bg-slate-600 text-slate-300 rounded border border-slate-600 transition">+ Node</button>
+      </div>
+
+      <!-- Divider -->
+      <div class="w-px h-6 bg-slate-700 hidden sm:block"></div>
+
+      <!-- Loop toggle -->
+      <button id="btn-loop" class="px-3 py-1.5 text-xs font-mono bg-slate-700 hover:bg-slate-600 text-slate-400 rounded-lg border border-slate-600 transition">
+        Loop: Off
+      </button>
+
       <!-- Reset -->
       <div class="ml-auto">
         <button id="btn-reset" class="px-3 py-1.5 text-xs font-mono bg-red-900/40 hover:bg-red-800/50 text-red-300 rounded-lg border border-red-700/40 transition">
@@ -67,11 +86,16 @@ const tv = t.visualizer;
     </div>
 
     <!-- Progress bar -->
-    <div class="mt-2 h-1 bg-slate-800 rounded-full overflow-hidden">
-      <div id="progress-bar" class="h-full bg-sky-500 transition-all duration-200" style="width:0%"></div>
+    <div class="mt-2 relative">
+      <div id="progress-track" class="h-3 bg-slate-800 rounded-full overflow-hidden cursor-pointer relative">
+        <div id="progress-bar" class="h-full bg-sky-500 transition-none" style="width:0%"></div>
+        <!-- tick marks rendered by JS -->
+        <div id="progress-ticks" class="absolute inset-0 pointer-events-none"></div>
+      </div>
     </div>
     <div class="mt-1 flex justify-between text-xs font-mono text-slate-600">
       <span id="progress-label">0 / 0</span>
+      <span id="loop-indicator" class="text-amber-400 hidden">Looping...</span>
       <span id="time-label">t=0ms</span>
     </div>
   </section>
@@ -95,6 +119,11 @@ const tv = t.visualizer;
             <g id="viz-edges"></g>
             <g id="viz-nodes"></g>
             <g id="viz-packets"></g>
+            <!-- Tooltip -->
+            <g id="viz-tooltip" style="display:none; pointer-events:none">
+              <rect id="viz-tooltip-bg" rx="4" ry="4" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+              <text id="viz-tooltip-text" fill="#cbd5e1" font-size="10" font-family="JetBrains Mono, monospace"></text>
+            </g>
           </svg>
 
           <!-- Legend -->
@@ -104,6 +133,7 @@ const tv = t.visualizer;
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span>{tv.legend_candidate}</span>
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-amber-500 inline-block"></span>{tv.legend_leader}</span>
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-slate-600 inline-block"></span>{tv.legend_dead}</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-0.5 bg-indigo-400 inline-block rounded"></span>election timer</span>
           </div>
         </div>
 
@@ -161,12 +191,33 @@ const tv = t.visualizer;
     dead:      '#37415108',
   };
 
+  // Packet label + color by event type
+  const PACKET_LABEL: Record<string, string> = {
+    request_vote:    'RV',
+    vote_granted:    '✓',
+    vote_denied:     '✗',
+    heartbeat:       '♥',
+    append_entries:  'AE',
+    append_ack:      '✓',
+  };
+  const PACKET_COLOR: Record<string, string> = {
+    request_vote:    '#10b981',  // green — vote request
+    vote_granted:    '#06b6d4',  // teal — vote grant
+    vote_denied:     '#ef4444',  // red
+    heartbeat:       '#f59e0b',  // amber — heartbeat
+    append_entries:  '#f59e0b',  // amber — AE
+    append_ack:      '#38bdf8',  // blue — ack
+  };
+
   const NODE_R = 30;
+  const TIMER_R = NODE_R + 12; // radius of election timer ring
   const SVG_W = 600;
   const SVG_H = 380;
   const LANG = 'en';
 
-  // Event type display names
+  // Election timeout in ms (simulated)
+  const ELECTION_TIMEOUT_MS = 2500;
+
   const EVENT_LABELS: Record<string, string> = {
     election_timeout: 'election timeout',
     request_vote: 'RequestVote',
@@ -200,11 +251,17 @@ const tv = t.visualizer;
   // ─── State ────────────────────────────────────────────────────────────────────
 
   let events: SimEvent[] = [];
-  let cursor = -1; // index of last applied event
+  let cursor = -1;
   let playing = false;
   let playTimer: ReturnType<typeof setTimeout> | null = null;
   let speedMultiplier = 1;
   let selectedNode: number | null = null;
+  let nodeCount = 5;
+  let looping = false;
+  let loopPauseTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Election timer animation state: maps nodeId → animation controller
+  const timerAnimations: Map<number, ReturnType<typeof waapi.animate>> = new Map();
 
   // ─── DOM refs ─────────────────────────────────────────────────────────────────
 
@@ -212,24 +269,34 @@ const tv = t.visualizer;
   const edgesG = document.getElementById('viz-edges') as SVGGElement;
   const nodesG = document.getElementById('viz-nodes') as SVGGElement;
   const packetsG = document.getElementById('viz-packets') as SVGGElement;
+  const tooltipG = document.getElementById('viz-tooltip') as SVGGElement;
+  const tooltipBg = document.getElementById('viz-tooltip-bg') as SVGRectElement;
+  const tooltipText = document.getElementById('viz-tooltip-text') as SVGTextElement;
   const narrationText = document.getElementById('narration-text')!;
   const narrationBadge = document.getElementById('narration-badge')!;
   const narrationType = document.getElementById('narration-type')!;
   const nodeDetail = document.getElementById('node-detail')!;
   const eventLog = document.getElementById('event-log')!;
   const progressBar = document.getElementById('progress-bar')!;
+  const progressTrack = document.getElementById('progress-track')!;
+  const progressTicks = document.getElementById('progress-ticks')!;
   const progressLabel = document.getElementById('progress-label')!;
   const timeLabel = document.getElementById('time-label')!;
+  const loopIndicator = document.getElementById('loop-indicator')!;
   const btnPlay = document.getElementById('btn-play')!;
   const btnStepBack = document.getElementById('btn-step-back') as HTMLButtonElement;
   const btnStepFwd = document.getElementById('btn-step-fwd')!;
   const btnReset = document.getElementById('btn-reset')!;
+  const btnLoop = document.getElementById('btn-loop')!;
+  const btnAddNode = document.getElementById('btn-add-node')!;
+  const btnRemoveNode = document.getElementById('btn-remove-node')!;
+  const nodeCountLabel = document.getElementById('node-count-label')!;
   const selSpeed = document.getElementById('sel-speed') as HTMLSelectElement;
   const selScenario = document.getElementById('sel-scenario') as HTMLSelectElement;
 
   // ─── SVG helpers ──────────────────────────────────────────────────────────────
 
-  function svgEl2<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number> = {}): SVGElementTagNameMap[K] {
+  function svgMake<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number> = {}): SVGElementTagNameMap[K] {
     const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
     for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
     return el;
@@ -245,6 +312,55 @@ const tv = t.visualizer;
     });
   }
 
+  // ─── Election Timer Arcs ──────────────────────────────────────────────────────
+
+  const timerCircumference = 2 * Math.PI * TIMER_R;
+
+  function startTimerArc(nodeId: number, pos: { x: number; y: number }) {
+    // Remove old
+    stopTimerArc(nodeId);
+
+    const arc = document.getElementById(`vtimer-${nodeId}`) as SVGCircleElement | null;
+    if (!arc) return;
+
+    // Reset to full
+    arc.style.strokeDashoffset = '0';
+    arc.style.opacity = '1';
+
+    const durationMs = Math.round(ELECTION_TIMEOUT_MS / speedMultiplier);
+    const anim = waapi.animate(arc, {
+      strokeDashoffset: [0, timerCircumference],
+      duration: durationMs,
+      ease: 'linear',
+      loop: true,
+    });
+    timerAnimations.set(nodeId, anim);
+  }
+
+  function stopTimerArc(nodeId: number) {
+    const existing = timerAnimations.get(nodeId);
+    if (existing) {
+      try { (existing as any).pause?.(); } catch {}
+      timerAnimations.delete(nodeId);
+    }
+    const arc = document.getElementById(`vtimer-${nodeId}`) as SVGCircleElement | null;
+    if (arc) {
+      arc.style.opacity = '0';
+      arc.style.strokeDashoffset = '0';
+    }
+  }
+
+  function updateTimerArcs(state: ReturnType<typeof generateScenario>[number]['state']) {
+    for (const node of state.nodes) {
+      if (node.state === 'follower') {
+        const pos = nodePositions(state.nodes.length)[node.id - 1];
+        if (pos) startTimerArc(node.id, pos);
+      } else {
+        stopTimerArc(node.id);
+      }
+    }
+  }
+
   // ─── Rendering ────────────────────────────────────────────────────────────────
 
   function renderCluster(state: ReturnType<typeof generateScenario>[number]['state']) {
@@ -257,7 +373,7 @@ const tv = t.visualizer;
       for (let j = i + 1; j < alive.length; j++) {
         const a = positions[alive[i].id - 1];
         const b = positions[alive[j].id - 1];
-        edgesG.appendChild(svgEl2('line', {
+        edgesG.appendChild(svgMake('line', {
           x1: a.x, y1: a.y, x2: b.x, y2: b.y,
           stroke: '#1e293b', 'stroke-width': 1.5,
         }));
@@ -268,54 +384,74 @@ const tv = t.visualizer;
     nodesG.innerHTML = '';
     state.nodes.forEach((node, i) => {
       const pos = positions[i];
-      const g = svgEl2('g', {
+      const g = svgMake('g', {
         id: `vnode-${node.id}`,
         style: 'cursor:pointer',
       });
 
+      // Election timer arc (follower only)
+      const timerArc = svgMake('circle', {
+        cx: pos.x, cy: pos.y, r: TIMER_R,
+        fill: 'none',
+        stroke: '#6366f1',
+        'stroke-width': 3,
+        'stroke-dasharray': timerCircumference,
+        'stroke-dashoffset': 0,
+        'stroke-linecap': 'round',
+        opacity: node.state === 'follower' ? 1 : 0,
+        transform: `rotate(-90, ${pos.x}, ${pos.y})`,
+        id: `vtimer-${node.id}`,
+        style: 'pointer-events:none',
+      });
+
       // Glow ring (leader only)
-      const glowR = svgEl2('circle', {
+      const glowR = svgMake('circle', {
         cx: pos.x, cy: pos.y, r: NODE_R + 10,
         fill: 'none',
         stroke: node.state === 'leader' ? COLOR.leader : 'transparent',
         'stroke-width': 2,
         opacity: node.state === 'leader' ? 0.5 : 0,
         id: `vglow-${node.id}`,
+        style: 'pointer-events:none',
       });
 
-      const circle = svgEl2('circle', {
+      const circle = svgMake('circle', {
         cx: pos.x, cy: pos.y, r: NODE_R,
         fill: FILL_ALPHA[node.state] ?? FILL_ALPHA.dead,
-        stroke: node.state === selectedNode ? '#38bdf8' : (COLOR[node.state] ?? COLOR.dead),
-        'stroke-width': node.state === selectedNode ? 3 : 2,
+        stroke: selectedNode === node.id ? '#38bdf8' : (COLOR[node.state] ?? COLOR.dead),
+        'stroke-width': selectedNode === node.id ? 3 : 2,
         id: `vcircle-${node.id}`,
       });
 
-      const labelId = svgEl2('text', {
+      const labelId = svgMake('text', {
         x: pos.x, y: pos.y - 6,
         'text-anchor': 'middle',
         fill: COLOR[node.state] ?? COLOR.dead,
         'font-size': 12, 'font-family': 'JetBrains Mono, monospace',
         'font-weight': 'bold',
+        style: 'pointer-events:none',
       });
       labelId.textContent = `N${node.id}`;
 
-      const labelState = svgEl2('text', {
+      const labelState = svgMake('text', {
         x: pos.x, y: pos.y + 10,
         'text-anchor': 'middle',
         fill: '#64748b',
         'font-size': 9, 'font-family': 'JetBrains Mono, monospace',
+        style: 'pointer-events:none',
       });
       labelState.textContent = node.state;
 
-      const labelTerm = svgEl2('text', {
+      const labelTerm = svgMake('text', {
         x: pos.x, y: pos.y + 22,
         'text-anchor': 'middle',
         fill: '#475569',
         'font-size': 8, 'font-family': 'JetBrains Mono, monospace',
+        style: 'pointer-events:none',
       });
       labelTerm.textContent = `t${node.term}`;
 
+      g.appendChild(timerArc);
       g.appendChild(glowR);
       g.appendChild(circle);
       g.appendChild(labelId);
@@ -323,7 +459,49 @@ const tv = t.visualizer;
       g.appendChild(labelTerm);
       nodesG.appendChild(g);
 
-      // Click handler
+      // Hover tooltip
+      g.addEventListener('mouseenter', (e) => {
+        const stateColor =
+          node.state === 'leader' ? '#f59e0b' :
+          node.state === 'candidate' ? '#10b981' :
+          node.state === 'dead' ? '#6b7280' : '#6366f1';
+
+        tooltipText.innerHTML = '';
+
+        const line1 = svgMake('tspan', {
+          x: pos.x, dy: 0,
+          fill: stateColor, 'font-weight': 'bold',
+          'font-size': 11,
+        });
+        line1.textContent = `N${node.id} · ${node.state}`;
+
+        const line2 = svgMake('tspan', {
+          x: pos.x, dy: 16,
+          fill: '#94a3b8',
+        });
+        line2.textContent = `term ${node.term}`;
+
+        tooltipText.appendChild(line1);
+        tooltipText.appendChild(line2);
+
+        const tipX = pos.x;
+        const tipY = pos.y - NODE_R - 42;
+        tooltipText.setAttribute('x', String(tipX));
+        tooltipText.setAttribute('y', String(tipY + 4));
+
+        tooltipBg.setAttribute('x', String(tipX - 44));
+        tooltipBg.setAttribute('y', String(tipY - 2));
+        tooltipBg.setAttribute('width', '88');
+        tooltipBg.setAttribute('height', '34');
+
+        tooltipG.style.display = '';
+      });
+
+      g.addEventListener('mouseleave', () => {
+        tooltipG.style.display = 'none';
+      });
+
+      // Click: show detail panel
       g.addEventListener('click', () => {
         selectedNode = selectedNode === node.id ? null : node.id;
         renderCluster(state);
@@ -341,26 +519,87 @@ const tv = t.visualizer;
         });
       }
     });
+
+    // Restart timer arcs for current state
+    updateTimerArcs(state);
   }
 
-  function animatePacket(fromId: number, toId: number, color: string, state: ReturnType<typeof generateScenario>[number]['state']) {
+  function animatePacket(fromId: number, toId: number, color: string, label: string, state: ReturnType<typeof generateScenario>[number]['state']) {
     const positions = nodePositions(state.nodes.length);
     const from = positions[fromId - 1];
     const to = positions[toId - 1];
     if (!from || !to) return;
 
-    const packet = svgEl2('circle', {
-      cx: from.x, cy: from.y, r: 5,
-      fill: color, opacity: 0.9,
-    });
-    packetsG.appendChild(packet);
+    const duration = Math.round(500 / speedMultiplier);
 
-    const duration = Math.round(400 / speedMultiplier);
+    // Main packet circle
+    const packet = svgMake('circle', {
+      cx: from.x, cy: from.y, r: 7,
+      fill: color, opacity: 0.95,
+    });
+
+    // Trail circles for fade effect
+    const trail1 = svgMake('circle', {
+      cx: from.x, cy: from.y, r: 5,
+      fill: color, opacity: 0.5,
+    });
+    const trail2 = svgMake('circle', {
+      cx: from.x, cy: from.y, r: 3,
+      fill: color, opacity: 0.2,
+    });
+
+    // Label text
+    const pLabel = svgMake('text', {
+      x: from.x, y: from.y - 12,
+      'text-anchor': 'middle',
+      fill: '#fff',
+      'font-size': 8,
+      'font-family': 'JetBrains Mono, monospace',
+      'font-weight': 'bold',
+      'pointer-events': 'none',
+    });
+    pLabel.textContent = label;
+
+    packetsG.appendChild(trail2);
+    packetsG.appendChild(trail1);
+    packetsG.appendChild(packet);
+    packetsG.appendChild(pLabel);
+
+    // Animate main packet
     waapi.animate(packet, {
       cx: to.x, cy: to.y,
       duration,
       ease: 'inOut(2)',
-      onComplete: () => packet.remove(),
+      onComplete: () => {
+        packet.remove();
+        pLabel.remove();
+      },
+    });
+
+    // Trails follow with delay
+    waapi.animate(trail1, {
+      cx: to.x, cy: to.y,
+      opacity: [0.5, 0],
+      duration,
+      delay: 60,
+      ease: 'inOut(2)',
+      onComplete: () => trail1.remove(),
+    });
+    waapi.animate(trail2, {
+      cx: to.x, cy: to.y,
+      opacity: [0.2, 0],
+      duration,
+      delay: 120,
+      ease: 'inOut(2)',
+      onComplete: () => trail2.remove(),
+    });
+
+    // Animate label alongside packet
+    waapi.animate(pLabel, {
+      x: to.x, y: to.y - 12,
+      opacity: [1, 0],
+      duration,
+      ease: 'inOut(2)',
     });
   }
 
@@ -379,24 +618,25 @@ const tv = t.visualizer;
   function applyEvent(event: SimEvent) {
     renderCluster(event.state);
 
-    // Trigger visual effects
     const { type, from, to, nodeId } = event;
 
     if (from && to) {
-      const packetColor =
-        type === 'vote_granted' ? COLOR.candidate :
-        type === 'vote_denied'  ? '#ef4444' :
-        type === 'heartbeat'    ? COLOR.leader :
-        type === 'append_entries' ? COLOR.leader :
-        type === 'append_ack'   ? '#94a3b8' :
-        '#38bdf8';
-      animatePacket(from, to, packetColor, event.state);
+      const color = PACKET_COLOR[type] ?? '#38bdf8';
+      const label = PACKET_LABEL[type] ?? '?';
+      animatePacket(from, to, color, label, event.state);
     }
 
-    if (nodeId && nodeId > 0) {
-      flashNode(nodeId);
-    }
+    if (nodeId && nodeId > 0) flashNode(nodeId);
     if (from) flashNode(from);
+
+    // Reset timer for heartbeat recipients
+    if (type === 'heartbeat' && to) {
+      const toNode = event.state.nodes.find(n => n.id === to);
+      if (toNode?.state === 'follower') {
+        const pos = nodePositions(event.state.nodes.length)[to - 1];
+        if (pos) startTimerArc(to, pos);
+      }
+    }
 
     // Update narration
     narrationText.textContent = event.narration[LANG];
@@ -404,22 +644,44 @@ const tv = t.visualizer;
     narrationType.textContent = EVENT_LABELS[type] ?? type;
     narrationType.className = `px-2 py-0.5 rounded text-xs font-mono border ${EVENT_COLORS[type] ?? 'text-slate-300 bg-slate-800 border-slate-700'}`;
 
-    // Update node detail if selected node exists in current state
+    // Update node detail if selected
     if (selectedNode !== null) {
       const nd = event.state.nodes.find(n => n.id === selectedNode);
       if (nd) renderNodeDetail(nd);
     }
 
     // Update progress
-    const pct = events.length > 0 ? Math.round(((cursor + 1) / events.length) * 100) : 0;
-    progressBar.style.width = `${pct}%`;
-    progressLabel.textContent = `${cursor + 1} / ${events.length}`;
-    timeLabel.textContent = `t=${event.timestamp}ms`;
+    updateProgress();
 
     // Add to event log
     addEventLogEntry(event, cursor);
 
     btnStepBack.disabled = cursor <= 0;
+  }
+
+  function updateProgress() {
+    const pct = events.length > 0 ? ((cursor + 1) / events.length) * 100 : 0;
+    progressBar.style.width = `${pct}%`;
+    progressLabel.textContent = `${cursor + 1} / ${events.length}`;
+    if (cursor >= 0 && cursor < events.length) {
+      timeLabel.textContent = `t=${events[cursor].timestamp}ms`;
+    }
+  }
+
+  function renderProgressTicks() {
+    progressTicks.innerHTML = '';
+    const w = progressTrack.clientWidth || 600;
+    events.forEach((ev, i) => {
+      const x = (i / Math.max(events.length - 1, 1)) * 100;
+      const tick = document.createElement('div');
+      tick.style.cssText = `position:absolute;top:0;bottom:0;left:${x}%;width:2px;background:#334155;cursor:pointer;`;
+      tick.title = EVENT_LABELS[ev.type] ?? ev.type;
+      tick.addEventListener('click', (e) => {
+        e.stopPropagation();
+        jumpTo(i);
+      });
+      progressTicks.appendChild(tick);
+    });
   }
 
   function renderNodeDetail(node: NodeState) {
@@ -474,7 +736,6 @@ const tv = t.visualizer;
   function jumpTo(idx: number) {
     if (idx < 0 || idx >= events.length) return;
     cursor = idx;
-    // Rebuild event log up to cursor
     eventLog.innerHTML = '';
     for (let i = 0; i <= cursor; i++) {
       addEventLogEntry(events[i], i);
@@ -486,6 +747,14 @@ const tv = t.visualizer;
   function stepForward() {
     if (cursor + 1 >= events.length) {
       stopPlay();
+      if (looping) {
+        loopIndicator.classList.remove('hidden');
+        loopPauseTimer = setTimeout(() => {
+          loopIndicator.classList.add('hidden');
+          reset(false); // don't re-load scenario, just rewind
+          startPlay();
+        }, 3000);
+      }
       return;
     }
     cursor++;
@@ -495,7 +764,6 @@ const tv = t.visualizer;
   function stepBack() {
     if (cursor <= 0) return;
     cursor--;
-    // Rebuild from scratch to cursor
     eventLog.innerHTML = '';
     for (let i = 0; i <= cursor; i++) {
       addEventLogEntry(events[i], i);
@@ -507,11 +775,24 @@ const tv = t.visualizer;
 
   function scheduleNext() {
     if (!playing) return;
-    if (cursor + 1 >= events.length) { stopPlay(); return; }
+    if (cursor + 1 >= events.length) {
+      stopPlay();
+      if (looping) {
+        loopIndicator.classList.remove('hidden');
+        loopPauseTimer = setTimeout(() => {
+          loopIndicator.classList.add('hidden');
+          reset(false);
+          startPlay();
+        }, 3000);
+      }
+      return;
+    }
 
     const next = events[cursor + 1];
     const current = cursor >= 0 ? events[cursor] : { timestamp: 0 };
-    const delay = Math.max(50, (next.timestamp - current.timestamp) / speedMultiplier);
+    // Minimum 500ms hold between events for readability
+    const rawDelay = (next.timestamp - current.timestamp) / speedMultiplier;
+    const delay = Math.max(500 / speedMultiplier, rawDelay);
 
     playTimer = setTimeout(() => {
       stepForward();
@@ -530,12 +811,22 @@ const tv = t.visualizer;
   function stopPlay() {
     playing = false;
     if (playTimer) { clearTimeout(playTimer); playTimer = null; }
+    if (loopPauseTimer) { clearTimeout(loopPauseTimer); loopPauseTimer = null; }
+    loopIndicator.classList.add('hidden');
     btnPlay.textContent = 'Play';
     btnPlay.className = 'px-4 py-1.5 text-xs font-mono bg-sky-700 hover:bg-sky-600 text-white rounded-lg border border-sky-600 transition';
   }
 
-  function reset() {
-    stopPlay();
+  function reset(reloadScenario = true) {
+    // Cancel all timer animations
+    for (const [id] of timerAnimations) {
+      stopTimerArc(id);
+    }
+    timerAnimations.clear();
+
+    if (reloadScenario) {
+      stopPlay();
+    }
     cursor = -1;
     selectedNode = null;
     eventLog.innerHTML = '';
@@ -546,16 +837,18 @@ const tv = t.visualizer;
     progressLabel.textContent = `0 / ${events.length}`;
     timeLabel.textContent = 't=0ms';
     btnStepBack.disabled = true;
-    // Render initial cluster state
+    packetsG.innerHTML = '';
+
     if (events.length > 0) {
-      packetsG.innerHTML = '';
       renderCluster(events[0].state);
+      renderProgressTicks();
     }
   }
 
   function loadScenario(name: ScenarioName) {
-    events = generateScenario(name);
-    reset();
+    stopPlay();
+    events = generateScenario(name, nodeCount);
+    reset(false);
   }
 
   // ─── Init ─────────────────────────────────────────────────────────────────────
@@ -589,5 +882,39 @@ const tv = t.visualizer;
 
   selSpeed.addEventListener('change', () => {
     speedMultiplier = parseFloat(selSpeed.value);
+    // Restart timer arcs at new speed if we have a current state
+    if (cursor >= 0) {
+      updateTimerArcs(events[cursor].state);
+    }
+  });
+
+  btnLoop.addEventListener('click', () => {
+    looping = !looping;
+    btnLoop.textContent = `Loop: ${looping ? 'On' : 'Off'}`;
+    btnLoop.className = looping
+      ? 'px-3 py-1.5 text-xs font-mono bg-amber-900/40 hover:bg-amber-800/50 text-amber-300 rounded-lg border border-amber-700/40 transition'
+      : 'px-3 py-1.5 text-xs font-mono bg-slate-700 hover:bg-slate-600 text-slate-400 rounded-lg border border-slate-600 transition';
+  });
+
+  btnAddNode.addEventListener('click', () => {
+    if (nodeCount >= 9) return;
+    nodeCount++;
+    nodeCountLabel.textContent = String(nodeCount);
+    loadScenario(selScenario.value as ScenarioName);
+  });
+
+  btnRemoveNode.addEventListener('click', () => {
+    if (nodeCount <= 3) return;
+    nodeCount--;
+    nodeCountLabel.textContent = String(nodeCount);
+    loadScenario(selScenario.value as ScenarioName);
+  });
+
+  // Progress bar click to jump
+  progressTrack.addEventListener('click', (e: MouseEvent) => {
+    const rect = progressTrack.getBoundingClientRect();
+    const pct = (e.clientX - rect.left) / rect.width;
+    const idx = Math.min(events.length - 1, Math.floor(pct * events.length));
+    if (idx >= 0) jumpTo(idx);
   });
 </script>
