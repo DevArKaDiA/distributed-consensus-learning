@@ -1035,6 +1035,41 @@ const [pyHtml, tsHtml, goHtml, rustHtml] = await Promise.all([
   </section>
 </Base>
 
+<style>
+  /* Shiki output — override the default inline styles for our dark design */
+  .shiki-wrapper :global(pre) {
+    margin: 0;
+    padding: 1.25rem 1.5rem;
+    background: #0d1117 !important;
+    font-size: 13px;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Fira Mono', monospace;
+    line-height: 1.7;
+    white-space: pre;
+  }
+  .shiki-wrapper :global(code) {
+    font-size: inherit;
+    font-family: inherit;
+    counter-reset: line;
+  }
+  .shiki-wrapper :global(.line) {
+    display: inline-block;
+    width: 100%;
+  }
+  .shiki-wrapper :global(.line::before) {
+    content: counter(line);
+    counter-increment: line;
+    display: inline-block;
+    width: 2.5rem;
+    text-align: right;
+    margin-right: 1.5rem;
+    padding-right: 0.75rem;
+    border-right: 1px solid #30363d;
+    color: #484f58;
+    user-select: none;
+    font-variant-numeric: tabular-nums;
+  }
+</style>
+
 <script>
   // Language tab switcher
   document.querySelectorAll('.lang-tab').forEach(btn => {
@@ -1056,11 +1091,13 @@ const [pyHtml, tsHtml, goHtml, rustHtml] = await Promise.all([
   // Copy buttons
   document.querySelectorAll('.copy-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
-      const targetId = (btn as HTMLElement).dataset.target!;
-      const code = document.getElementById(targetId)?.textContent ?? '';
+      const lang = (btn as HTMLElement).dataset.lang!;
+      const panel = document.getElementById(`code-${lang}`);
+      const code = panel?.querySelector('code')?.textContent ?? '';
       await navigator.clipboard.writeText(code);
-      btn.textContent = 'Copied!';
-      setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+      const svgIcon = btn.querySelector('svg')?.outerHTML ?? '';
+      btn.innerHTML = svgIcon + ' Copied!';
+      setTimeout(() => { btn.innerHTML = svgIcon + ' Copy'; }, 2000);
     });
   });
 </script>
