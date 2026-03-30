@@ -33,6 +33,15 @@ export const en = {
     ],
     paxos_title: 'Why Raft, not Paxos?',
     paxos_body: 'Paxos was the dominant consensus algorithm for decades but is notoriously hard to understand and implement correctly. Raft was designed explicitly for <strong>understandability</strong> — its authors ran studies showing students learn it significantly faster. That\'s why so much modern infrastructure chooses Raft.',
+    ack_title: 'Acknowledgements',
+    ack_intro: 'This site was built on the shoulders of these resources:',
+    ack_sources: [
+      { label: 'Original Raft paper', detail: '"In Search of an Understandable Consensus Algorithm" — Diego Ongaro & John Ousterhout', href: 'https://raft.github.io/raft.pdf' },
+      { label: 'Raft website', detail: 'raft.github.io — canonical reference and visualization links', href: 'https://raft.github.io' },
+      { label: 'Raftscope', detail: 'Interactive Raft visualization by Diego Ongaro', href: 'https://github.com/ongardie/raftscope' },
+      { label: 'etcd documentation', detail: 'etcd.io — production Raft implementation and docs', href: 'https://etcd.io/docs/' },
+      { label: 'MIT 6.824 Distributed Systems', detail: 'Lecture notes and labs by Robert Morris et al.', href: 'https://pdos.csail.mit.edu/6.824/' },
+    ],
   },
 
   // Cluster buttons
@@ -164,6 +173,14 @@ export const en = {
     legend_candidate: 'Candidate',
     legend_leader: 'Leader',
     legend_dead: 'Dead',
+  },
+
+  // Code page
+  code: {
+    ack_title: 'Acknowledgements',
+    ack_desc: 'The code examples implement the algorithm described in this paper.',
+    prev: '← In the Wild',
+    next: 'Next: Resources →',
   },
 
   // Acknowledgements

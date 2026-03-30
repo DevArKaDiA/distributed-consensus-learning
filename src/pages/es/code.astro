@@ -1,8 +1,9 @@
 ---
 import Base from '../../layouts/Base.astro';
-import { localePath } from '../../i18n';
+import { useTranslations, localePath } from '../../i18n';
 import { codeToHtml } from 'shiki';
 const lang = 'es';
+const t = useTranslations(lang);
 const base = import.meta.env.BASE_URL;
 const lp = (path: string) => localePath(lang, path, base);
 
@@ -1020,17 +1021,17 @@ const [pyHtml, tsHtml, goHtml, rustHtml] = await Promise.all([
 
   <section class="max-w-4xl mx-auto px-4 pb-4">
     <div class="bg-slate-900/50 border border-slate-800 rounded-xl p-5 mt-4">
-      <h3 class="text-xs font-mono text-slate-500 uppercase tracking-wide mb-3">Agradecimientos</h3>
+      <h3 class="text-xs font-mono text-slate-500 uppercase tracking-wide mb-3">{t.code.ack_title}</h3>
       <ul class="text-slate-400 text-xs space-y-1.5 leading-relaxed">
-        <li><span class="text-slate-300">Diego Ongaro &amp; John Ousterhout</span> — <a href="https://raft.github.io/raft.pdf" target="_blank" class="text-sky-400 hover:underline">In Search of an Understandable Consensus Algorithm (2014)</a>. Los ejemplos de código implementan el algoritmo descrito en este paper.</li>
+        <li><span class="text-slate-300">Diego Ongaro &amp; John Ousterhout</span> — <a href="https://raft.github.io/raft.pdf" target="_blank" class="text-sky-400 hover:underline">In Search of an Understandable Consensus Algorithm (2014)</a>. {t.code.ack_desc}</li>
       </ul>
     </div>
   </section>
 
   <section class="max-w-4xl mx-auto px-4 py-6">
     <div class="flex justify-between items-center">
-      <a href={lp('/in-the-wild')} class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition text-sm">← En Producción</a>
-      <a href={lp('/resources')} class="px-6 py-3 bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg transition">Siguiente: Recursos →</a>
+      <a href={lp('/in-the-wild')} class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition text-sm">{t.code.prev}</a>
+      <a href={lp('/resources')} class="px-6 py-3 bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg transition">{t.code.next}</a>
     </div>
   </section>
 </Base>

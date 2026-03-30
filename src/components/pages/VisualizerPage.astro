@@ -34,6 +34,7 @@ const strings = {
   d_commit:   isEs ? 'índiceConfirmado'  : 'commitIndex',
   d_log:      isEs ? 'log'               : 'log',
   d_empty_log: isEs ? '(log vacío)'      : '(empty log)',
+  d_node_detail_empty: isEs ? 'Haz clic en un nodo para inspeccionar su estado.' : 'Click a node to inspect its state.',
   // KV terminal
   kv_welcome1: isEs ? '  distributed-kv v1.0  —  almacén clave/valor con Raft' : '  distributed-kv v1.0  —  Raft-backed key/value store',
   kv_welcome2: isEs ? '  escribe help para los comandos disponibles' : '  type help for available commands',
@@ -43,6 +44,95 @@ const strings = {
   adm_welcome1: isEs ? '  cluster-admin v1.0  —  control elevado del clúster' : '  cluster-admin v1.0  —  elevated cluster control',
   adm_welcome2: isEs ? '  ⚠ las mutaciones se aplican al estado de la simulación en vivo' : '  ⚠ mutations apply to live simulation state',
   adm_welcome3: isEs ? '  escribe help para los comandos disponibles' : '  type help for available commands',
+  // UI labels (injected into HTML initial state via script or used in script)
+  ui_live: isEs ? 'En Vivo' : 'Live',
+  // KV help output
+  kv_help_header:   isEs ? '  Comandos:'                                          : '  Commands:',
+  kv_help_set:      isEs ? '    set <clave> <valor>   — escribir una clave'       : '    set <key> <value>   — write a key',
+  kv_help_get:      isEs ? '    get <clave>           — leer clave del líder'     : '    get <key>           — read a key from leader',
+  kv_help_del:      isEs ? '    del <clave>           — eliminar una clave'       : '    del <key>           — delete a key',
+  kv_help_keys:     isEs ? '    keys                 — listar claves confirmadas' : '    keys                — list all committed keys',
+  kv_help_state:    isEs ? '    state                — mostrar estado del clúster': '    state               — show cluster state',
+  kv_help_clear:    isEs ? '    clear                — limpiar terminal'          : '    clear               — clear terminal',
+  kv_help_help:     isEs ? '    help                 — este mensaje'              : '    help                — this message',
+  kv_empty_store:   isEs ? '  (almacén vacío)' : '  (empty store)',
+  kv_usage_get:     isEs ? '  uso: get <clave>' : '  usage: get <key>',
+  kv_usage_set:     isEs ? '  uso: set <clave> <valor>' : '  usage: set <key> <value>',
+  kv_usage_del:     isEs ? '  uso: del <clave>' : '  usage: del <key>',
+  kv_unknown_cmd:   isEs ? '  ✗ comando desconocido: ' : '  ✗ unknown command: ',
+  kv_reading_from:  isEs ? '  → leyendo del líder' : '  → reading from leader',
+  kv_leader_recv:   isEs ? '  → líder' : '  → leader',
+  kv_received:      isEs ? ' recibió ' : ' received ',
+  kv_replicating:   isEs ? '  → replicando a ' : '  → replicating to ',
+  kv_majority_ack:  isEs ? '  → ACK de mayoría (' : '  → majority ACK (',
+  kv_committed_set: isEs ? '  ✓ confirmado: ' : '  ✓ committed: ',
+  kv_committed_del: isEs ? '  ✓ confirmado: eliminado ' : '  ✓ committed: deleted ',
+  kv_cluster_term:  isEs ? '  término clúster: ' : '  cluster term: ',
+  kv_role_leader:   isEs ? ' [LÍDER]' : ' [LEADER]',
+  kv_role_dead:     isEs ? ' [CAÍDO]' : ' [DEAD]',
+  kv_key_not_found: isEs ? '  ✗ clave no encontrada: ' : '  ✗ key not found: ',
+  // Admin help output
+  adm_help_header:  isEs ? '  Comandos:'                                                          : '  Commands:',
+  adm_help_kill:    isEs ? '    kill <nodoId>         — crashear un nodo (ej. kill N3)'           : '    kill <nodeId>          — crash a node (e.g. kill N3)',
+  adm_help_revive:  isEs ? '    revive <nodoId>       — revivir nodo caído como seguidor'         : '    revive <nodeId>        — bring a dead node back as follower',
+  adm_help_part:    isEs ? '    partition <ids>       — aislar nodos (ej. partition N1,N2)'       : '    partition <ids>        — isolate nodes (e.g. partition N1,N2)',
+  adm_help_heal:    isEs ? '    heal                  — eliminar todas las particiones'           : '    heal                   — remove all partitions',
+  adm_help_quorum:  isEs ? '    quorum                — estado del quórum'                       : '    quorum                 — quorum status',
+  adm_help_leader:  isEs ? '    leader                — líder actual y término'                  : '    leader                 — current leader and term',
+  adm_help_term:    isEs ? '    term                  — término actual del clúster'              : '    term                   — current cluster term',
+  adm_help_logs:    isEs ? '    logs                  — longitud de log de cada nodo'            : '    logs                   — log lengths for all nodes',
+  adm_help_status:  isEs ? '    status                — resumen completo del clúster'            : '    status                 — full cluster overview',
+  adm_help_clear:   isEs ? '    clear                 — limpiar terminal'                        : '    clear                  — clear terminal',
+  adm_help_help:    isEs ? '    help                  — este mensaje'                            : '    help                   — this message',
+  // Admin kill output
+  adm_usage_kill:   isEs ? '  uso: kill <nodoId>  (ej. kill N3)'   : '  usage: kill <nodeId>  (e.g. kill N3)',
+  adm_not_found:    isEs ? ' no encontrado'      : ' not found',
+  adm_already_dead: isEs ? ' ya está caído'      : ' is already dead',
+  adm_is_dead:      isEs ? ' está caído'         : ' is dead',
+  adm_leader_lost:  isEs ? ' — líder perdido'    : ' — leader lost',
+  adm_quorum_lost:  isEs ? '  ✗ quórum perdido — clúster no disponible' : '  ✗ quorum lost — cluster unavailable',
+  adm_quorum_intact: isEs ? '  quórum intacto — ' : '  quorum intact — ',
+  adm_alive_suffix: isEs ? ' activos'   : ' alive',
+  // Admin revive output
+  adm_usage_revive:   isEs ? '  uso: revive <nodoId>  (ej. revive N3)' : '  usage: revive <nodeId>  (e.g. revive N3)',
+  adm_not_dead:       isEs ? ' no está caído (estado: ' : ' is not dead (state: ',
+  adm_rejoined:       isEs ? '  ✓ ' : '  ✓ ',
+  adm_rejoined_as:    isEs ? ' se reincorporó como seguidor (término ' : ' rejoined as follower (term ',
+  // Admin partition/heal output
+  adm_usage_part:     isEs ? '  uso: partition N1,N2  (separados por coma o espacio)' : '  usage: partition N1,N2  (comma or space separated)',
+  adm_isolated:       isEs ? ' aislado — paquetes hacia/desde este nodo serán descartados' : ' isolated — packets to/from this node will be dropped',
+  adm_skipped:        isEs ? ' no encontrado — omitido' : ' not found — skipped',
+  adm_no_partitions:  isEs ? '  sin particiones activas' : '  no active partitions',
+  adm_healed:         isEs ? '  partición sanada — restaurados: ' : '  partition healed — restored: ',
+  // Admin quorum/leader/term/logs/status output
+  adm_total_nodes:    isEs ? '  nodos totales : ' : '  total nodes : ',
+  adm_alive:          isEs ? '  activos       : ' : '  alive       : ',
+  adm_majority:       isEs ? '  mayoría       : ' : '  majority    : ',
+  adm_quorum_label:   isEs ? '  quórum        : ' : '  quorum      : ',
+  adm_no_leader:      isEs ? '  sin líder — clúster en elección o todos caídos' : '  no leader — cluster in election or all dead',
+  adm_leader_label:   isEs ? '  líder: '     : '  leader: ',
+  adm_cluster_term:   isEs ? '  término clúster: ' : '  cluster term: ',
+  adm_logs_header:    isEs ? '  nodo   log   indiceConf   estado' : '  node   log   commitIndex  state',
+  adm_status_term:    isEs ? '  término clúster : ' : '  cluster term : ',
+  adm_status_leader:  isEs ? '  líder         : ' : '  leader       : ',
+  adm_status_none:    isEs ? 'ninguno' : 'none',
+  adm_status_quorum:  isEs ? '  quórum        : ' : '  quorum       : ',
+  adm_alive_s:        isEs ? ' activos — mayoría ' : ' alive — majority ',
+  adm_ok:             isEs ? ' — OK'    : ' — OK',
+  adm_lost:           isEs ? ' — PERDIDO' : ' — LOST',
+  adm_partitioned:    isEs ? '  particionados : ' : '  partitioned  : ',
+  adm_isolated_tag:   isEs ? ' [AISLADO]' : ' [ISOLATED]',
+  adm_unknown_cmd:    isEs ? '  comando desconocido: ' : '  unknown command: ',
+  adm_type_help:      isEs ? '  (escribe help)' : '  (type help)',
+  // Snapshot / compaction
+  adm_help_compact:   isEs ? '    compact               — forzar compactación de log en todos los nodos'      : '    compact               — force log compaction on all nodes',
+  adm_compact_done:   isEs ? '  ✓ log compactado — snapshot en índice ' : '  ✓ log compacted — snapshot at index ',
+  adm_compact_none:   isEs ? '  nada que compactar (log corto en todos los nodos)' : '  nothing to compact (log short on all nodes)',
+  adm_snap_label:     isEs ? '  snapshot @ ' : '  snapshot @ ',
+  d_snapshot:         isEs ? 'snapshot' : 'snapshot',
+  n_compacting:       isEs ? 'compactando log — descartando entradas confirmadas' : 'compacting log — discarding committed entries',
+  n_install_snapshot: isEs ? `recibe InstallSnapshot del líder — saltando catch-up` : `receives InstallSnapshot from leader — skipping catch-up`,
+  n_node_joining_snap: isEs ? `se une como learner — el líder tiene snapshot, enviando InstallSnapshot` : `joining as learner — leader has snapshot, sending InstallSnapshot`,
 };
 ---
 <Base title={tv.title} {lang} currentPath="/visualizer">
@@ -59,7 +149,7 @@ const strings = {
 
       <!-- Sim Speed -->
       <div class="flex items-center gap-2">
-        <span class="text-slate-400 text-xs font-mono">Sim Speed</span>
+        <span class="text-slate-400 text-xs font-mono">{isEs ? 'Vel. Sim.' : 'Sim Speed'}</span>
         <select id="sel-speed" class="bg-slate-800 border border-slate-600 text-slate-300 text-xs font-mono rounded-lg px-2 py-1">
           <option value="0.25">0.25×</option>
           <option value="0.5" selected>0.5×</option>
@@ -73,10 +163,10 @@ const strings = {
 
       <!-- Node count controls -->
       <div class="flex items-center gap-2">
-        <span class="text-slate-400 text-xs font-mono">Nodes</span>
-        <button id="btn-remove-node" class="px-2 py-1 text-xs font-mono bg-slate-700 hover:bg-slate-600 text-slate-300 rounded border border-slate-600 transition">− Node</button>
+        <span class="text-slate-400 text-xs font-mono">{isEs ? 'Nodos' : 'Nodes'}</span>
+        <button id="btn-remove-node" class="px-2 py-1 text-xs font-mono bg-slate-700 hover:bg-slate-600 text-slate-300 rounded border border-slate-600 transition">− {isEs ? 'Nodo' : 'Node'}</button>
         <span id="node-count-label" class="text-slate-300 text-xs font-mono w-4 text-center">5</span>
-        <button id="btn-add-node" class="px-2 py-1 text-xs font-mono bg-slate-700 hover:bg-slate-600 text-slate-300 rounded border border-slate-600 transition">+ Node</button>
+        <button id="btn-add-node" class="px-2 py-1 text-xs font-mono bg-slate-700 hover:bg-slate-600 text-slate-300 rounded border border-slate-600 transition">+ {isEs ? 'Nodo' : 'Node'}</button>
       </div>
 
       <!-- Divider -->
@@ -85,7 +175,7 @@ const strings = {
       <!-- Sim status badge -->
       <div class="flex items-center gap-2">
         <span id="sim-status-dot" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block"></span>
-        <span id="sim-status-text" class="text-emerald-400 text-xs font-mono">Live</span>
+        <span id="sim-status-text" class="text-emerald-400 text-xs font-mono">{isEs ? 'En Vivo' : 'Live'}</span>
       </div>
 
       <!-- Reset -->
@@ -131,7 +221,8 @@ const strings = {
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span>{tv.legend_candidate}</span>
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-amber-500 inline-block"></span>{tv.legend_leader}</span>
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-slate-600 inline-block"></span>{tv.legend_dead}</span>
-            <span class="flex items-center gap-1.5"><span class="w-3 h-0.5 bg-indigo-400 inline-block rounded"></span>election timer</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-cyan-400 inline-block"></span>{isEs ? 'aprendiz' : 'learner'}</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-0.5 bg-indigo-400 inline-block rounded"></span>{isEs ? 'temporizador elección' : 'election timer'}</span>
           </div>
         </div>
 
@@ -178,8 +269,8 @@ const strings = {
         <span class="w-3 h-3 rounded-full bg-red-500 opacity-70"></span>
         <span class="w-3 h-3 rounded-full bg-amber-500 opacity-70"></span>
         <span class="w-3 h-3 rounded-full bg-green-500 opacity-70"></span>
-        <span class="text-slate-400 text-xs ml-3">distributed-kv — connected to cluster</span>
-        <span class="ml-auto text-slate-600 text-xs">type <span class="text-slate-400">help</span> for commands</span>
+        <span class="text-slate-400 text-xs ml-3">distributed-kv — {isEs ? 'conectado al clúster' : 'connected to cluster'}</span>
+        <span class="ml-auto text-slate-600 text-xs">{isEs ? 'escribe' : 'type'} <span class="text-slate-400">help</span> {isEs ? 'para comandos' : 'for commands'}</span>
       </div>
       <!-- Output area -->
       <div id="kv-output" class="h-56 overflow-y-auto px-4 py-3 space-y-0.5 text-sm leading-5" style="scrollbar-color:#334155 #000"></div>
@@ -188,7 +279,7 @@ const strings = {
         <span class="text-green-400 select-none">$</span>
         <input id="kv-input" type="text" autocomplete="off" spellcheck="false"
           class="flex-1 bg-transparent text-green-300 text-sm outline-none placeholder-slate-600 caret-green-400"
-          placeholder="set key value  |  get key  |  del key  |  keys  |  state  |  help" />
+          placeholder={isEs ? 'set clave valor  |  get clave  |  del clave  |  keys  |  state  |  help' : 'set key value  |  get key  |  del key  |  keys  |  state  |  help'} />
       </div>
     </div>
 
@@ -199,8 +290,8 @@ const strings = {
         <span class="w-3 h-3 rounded-full bg-red-500 opacity-80"></span>
         <span class="w-3 h-3 rounded-full bg-amber-500 opacity-80"></span>
         <span class="w-3 h-3 rounded-full bg-green-500 opacity-50"></span>
-        <span class="text-red-400/80 text-xs ml-3">cluster-admin — use with caution</span>
-        <span class="ml-auto text-slate-600 text-xs">type <span class="text-slate-400">help</span> for commands</span>
+        <span class="text-red-400/80 text-xs ml-3">cluster-admin — {isEs ? 'usar con precaución' : 'use with caution'}</span>
+        <span class="ml-auto text-slate-600 text-xs">{isEs ? 'escribe' : 'type'} <span class="text-slate-400">help</span> {isEs ? 'para comandos' : 'for commands'}</span>
       </div>
       <!-- Output area -->
       <div id="admin-output" class="h-56 overflow-y-auto px-4 py-3 space-y-0.5 text-sm leading-5" style="scrollbar-color:#334155 #000"></div>
@@ -209,7 +300,7 @@ const strings = {
         <span class="text-red-400 select-none font-bold">#</span>
         <input id="admin-input" type="text" autocomplete="off" spellcheck="false"
           class="flex-1 bg-transparent text-amber-200 text-sm outline-none placeholder-slate-600 caret-red-400"
-          placeholder="kill N3  |  revive N3  |  partition N1,N2  |  heal  |  status" />
+          placeholder={isEs ? 'kill N3  |  revive N3  |  partition N1,N2  |  heal  |  status' : 'kill N3  |  revive N3  |  partition N1,N2  |  heal  |  status'} />
       </div>
     </div>
 
@@ -219,7 +310,11 @@ const strings = {
 </Base>
 
 <script define:vars={{ strings }}>
+  window.__vizStrings = strings;
+</script>
+<script>
   import { waapi } from 'animejs';
+  const strings = (window as any).__vizStrings;
 
   // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -263,6 +358,7 @@ const strings = {
   const ET_MIN = 1500;
   const ET_MAX = 3000;
   const HB_INTERVAL = 600;
+  const COMPACT_THRESHOLD = 8; // auto-compact when log exceeds this many entries
 
   const EVENT_LABELS = {
     election_timeout: 'election timeout',
@@ -419,13 +515,15 @@ const strings = {
   function renderCluster() {
     const state = getLiveState();
     const positions = nodePositions(state.nodes.length);
+    // Map node.id → position (works even when IDs have gaps after removal)
+    const posMap = new Map(state.nodes.map((n, i) => [n.id, positions[i]]));
 
     edgesG.innerHTML = '';
     const alive = state.nodes.filter(n => n.state !== 'dead');
     for (let i = 0; i < alive.length; i++) {
       for (let j = i + 1; j < alive.length; j++) {
-        const a = positions[alive[i].id - 1];
-        const b = positions[alive[j].id - 1];
+        const a = posMap.get(alive[i].id);
+        const b = posMap.get(alive[j].id);
         edgesG.appendChild(svgMake('line', {
           x1: a.x, y1: a.y, x2: b.x, y2: b.y,
           stroke: '#1e293b', 'stroke-width': 1.5,
@@ -434,8 +532,8 @@ const strings = {
     }
 
     nodesG.innerHTML = '';
-    state.nodes.forEach((node, i) => {
-      const pos = positions[i];
+    state.nodes.forEach((node) => {
+      const pos = posMap.get(node.id)!;
       const g = svgMake('g', { id: `vnode-${node.id}`, style: 'cursor:pointer' });
 
       const timerArc = svgMake('circle', {
@@ -586,7 +684,7 @@ const strings = {
       const oldRing = document.getElementById(`vpartition-${node.id}`);
       if (oldRing) oldRing.remove();
       if (isolatedNodes.has(node.id)) {
-        const pos = positions[node.id - 1];
+        const pos = posMap.get(node.id);
         if (!pos) continue;
         const ring = svgMake('circle', {
           cx: pos.x, cy: pos.y, r: NODE_R + 18,
@@ -609,8 +707,9 @@ const strings = {
 
   function animatePacket(fromId, toId, color, label) {
     const positions = nodePositions(liveCluster.nodes.length);
-    const from = positions[fromId - 1];
-    const to = positions[toId - 1];
+    const posMap = new Map(liveCluster.nodes.map((n, i) => [n.id, positions[i]]));
+    const from = posMap.get(fromId);
+    const to = posMap.get(toId);
     if (!from || !to) return;
 
     const duration = Math.round(500 / speedMultiplier);
@@ -860,11 +959,44 @@ const strings = {
       votedFor: null,
       log: [],
       commitIndex: -1,
+      snapshotIndex: -1,  // index of last entry included in snapshot (-1 = no snapshot)
+      snapshotTerm: 0,
       electionTimer: null,
       electionTimeout: randInt(ET_MIN, ET_MAX),
       votesReceived: 0,
     }));
     liveCluster.term = 0;
+  }
+
+  // Compact a single node's log up to its commitIndex
+  function compactNode(node) {
+    if (node.commitIndex < 0) return false;
+    const commitedEntries = node.log.slice(0, node.commitIndex + 1);
+    if (commitedEntries.length === 0) return false;
+    const lastEntry = commitedEntries[commitedEntries.length - 1];
+    node.snapshotIndex = node.commitIndex;
+    node.snapshotTerm = lastEntry.term;
+    // Keep only entries after the snapshot
+    node.log = node.log.slice(node.commitIndex + 1);
+    node.commitIndex = -1; // reset — new entries will be relative to snapshot
+    return true;
+  }
+
+  // Auto-compact all nodes that exceed the threshold
+  function maybeAutoCompact() {
+    let compacted = false;
+    for (const node of liveCluster.nodes) {
+      if (node.state !== 'dead' && node.log.length > COMPACT_THRESHOLD) {
+        if (compactNode(node)) compacted = true;
+      }
+    }
+    if (compacted) {
+      renderCluster();
+      if (selectedNode !== null) {
+        const nd = liveCluster.nodes.find(n => n.id === selectedNode);
+        if (nd) renderNodeDetail(nd);
+      }
+    }
   }
 
   function startSimulation() {
@@ -875,7 +1007,7 @@ const strings = {
     eventLog.innerHTML = '';
     narrationBadge.classList.add('hidden');
     narrationText.textContent = strings.n_sim_started;
-    nodeDetail.innerHTML = `<p class="text-slate-500 text-xs">${strings.d_state === 'estado' ? 'Haz clic en un nodo para inspeccionar su estado.' : 'Click a node to inspect its state.'}</p>`;
+    nodeDetail.innerHTML = `<p class="text-slate-500 text-xs">${strings.d_node_detail_empty}</p>`;
     selectedNode = null;
     isolatedNodes.clear();
 
@@ -885,7 +1017,7 @@ const strings = {
     renderCluster();
 
     simStatusDot.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block';
-    simStatusText.textContent = 'Live';
+    simStatusText.textContent = strings.ui_live;
     simStatusText.className = 'text-emerald-400 text-xs font-mono';
   }
 
@@ -929,6 +1061,8 @@ const strings = {
       votedFor: null,
       log: [],
       commitIndex: -1,
+      snapshotIndex: -1,
+      snapshotTerm: 0,
       electionTimer: null,
       electionTimeout: randInt(ET_MIN, ET_MAX),
       votesReceived: 0,
@@ -937,63 +1071,96 @@ const strings = {
     liveCluster.nodes.push(newNode);
     renderCluster();
 
-    setNarration('node_joining', `N${newNode.id} ${strings.n_node_joining}`);
-
-    const CATCHUP_STEPS = 5;
     const stepDelay = Math.round(400 / speedMultiplier);
     const sourceId = leader ? leader.id : liveCluster.nodes.find(n => n.state !== 'dead' && n.id !== newNode.id)?.id;
+    const leaderHasSnapshot = leader && leader.snapshotIndex >= 0;
 
-    let step = 0;
-    function catchupStep() {
-      step++;
-      newNode.syncProgress = step / CATCHUP_STEPS;
-
-      if (sourceId) {
-        const positions = nodePositions(liveCluster.nodes.length);
-        const srcPos = positions[sourceId - 1];
-        const dstPos = positions[newNode.id - 1];
-        if (srcPos && dstPos) {
-          kvSpawnPacket(srcPos.x, srcPos.y, dstPos.x, dstPos.y, '#f59e0b', 'AE', 0, undefined);
-        }
-      }
-
-      renderCluster();
-
-      if (step < CATCHUP_STEPS) {
-        setTimeout(catchupStep, stepDelay);
-      } else {
+    function promoteNewNode() {
+      if (leader) {
+        // Commit ADD_NODE membership change with AE animation
+        const entry = { term: currentTerm, command: `ADD_NODE N${newNode.id}`, committed: false };
+        liveCluster.nodes.forEach(n => { if (n.state !== 'dead') n.log.push({ ...entry }); });
+        renderCluster();
+        // Show AE packets from leader to peers for the membership change
+        const peers = liveCluster.nodes.filter(n => n.id !== leader.id && n.state !== 'dead');
+        peers.forEach((peer, i) => {
+          const positions = nodePositions(liveCluster.nodes.length);
+          const pm = new Map(liveCluster.nodes.map((n, j) => [n.id, positions[j]]));
+          const src = pm.get(leader.id), dst = pm.get(peer.id);
+          if (src && dst) kvSpawnPacket(src.x, src.y, dst.x, dst.y, '#f59e0b', 'AE', i * 50, undefined);
+        });
         setTimeout(() => {
-          if (leader) {
-            const entry = { term: currentTerm, command: `ADD_NODE N${newNode.id}`, committed: false };
-            liveCluster.nodes.forEach(n => {
-              if (n.state !== 'dead') n.log.push({ ...entry });
-            });
-            renderCluster();
-            setTimeout(() => {
-              liveCluster.nodes.forEach(n => {
-                const e = n.log[n.log.length - 1];
-                if (e && e.command === `ADD_NODE N${newNode.id}`) {
-                  e.committed = true;
-                  n.commitIndex = n.log.length - 1;
-                }
-              });
-              newNode.state = 'follower';
-              newNode.syncProgress = undefined;
-              scheduleElectionTimer(newNode);
-              setNarration('node_joined', `N${newNode.id} ${strings.n_node_joined_ok}${currentTerm})`);
-              renderCluster();
-            }, stepDelay);
-          } else {
-            newNode.state = 'follower';
-            newNode.syncProgress = undefined;
-            scheduleElectionTimer(newNode);
-            setNarration('node_joined', `N${newNode.id} ${strings.n_node_joined_wait}`);
-            renderCluster();
-          }
+          liveCluster.nodes.forEach(n => {
+            const e = n.log[n.log.length - 1];
+            if (e && e.command === `ADD_NODE N${newNode.id}`) {
+              e.committed = true;
+              n.commitIndex = n.log.length - 1;
+            }
+          });
+          newNode.state = 'follower';
+          newNode.syncProgress = undefined;
+          scheduleElectionTimer(newNode);
+          setNarration('node_joined', `N${newNode.id} ${strings.n_node_joined_ok}${currentTerm})`);
+          addLogEntry('node_recover', `N${newNode.id} promoted — voter (term ${currentTerm})`);
+          renderCluster();
         }, stepDelay);
+      } else {
+        newNode.state = 'follower';
+        newNode.syncProgress = undefined;
+        scheduleElectionTimer(newNode);
+        setNarration('node_joined', `N${newNode.id} ${strings.n_node_joined_wait}`);
+        renderCluster();
       }
     }
-    setTimeout(catchupStep, stepDelay);
+
+    if (leaderHasSnapshot) {
+      // Fast path: InstallSnapshot — single big packet, jump straight to 100%
+      setNarration('node_joining', `N${newNode.id} ${strings.n_node_joining_snap}`);
+      addLogEntry('append_entries', `N${leader.id} → InstallSnapshot → N${newNode.id}`);
+      newNode.syncProgress = 0.1;
+      renderCluster();
+      const positions = nodePositions(liveCluster.nodes.length);
+      const pm = new Map(liveCluster.nodes.map((n, i) => [n.id, positions[i]]));
+      const srcPos = pm.get(leader.id), dstPos = pm.get(newNode.id);
+      if (srcPos && dstPos) {
+        // Large cyan packet representing the snapshot
+        kvSpawnPacket(srcPos.x, srcPos.y, dstPos.x, dstPos.y, '#22d3ee', 'snap', 0, () => {
+          // Apply snapshot to new node
+          newNode.snapshotIndex = leader.snapshotIndex;
+          newNode.snapshotTerm = leader.snapshotTerm;
+          newNode.log = [...leader.log]; // copy post-snapshot entries
+          newNode.commitIndex = leader.commitIndex;
+          newNode.syncProgress = 1;
+          setNarration('node_joining', `N${newNode.id} ${strings.n_install_snapshot}`);
+          renderCluster();
+          setTimeout(promoteNewNode, stepDelay);
+        });
+      } else {
+        setTimeout(promoteNewNode, stepDelay * 3);
+      }
+    } else {
+      // Slow path: AE catch-up steps
+      setNarration('node_joining', `N${newNode.id} ${strings.n_node_joining}`);
+      const CATCHUP_STEPS = 5;
+      let step = 0;
+      function catchupStep() {
+        step++;
+        newNode.syncProgress = step / CATCHUP_STEPS;
+        if (sourceId) {
+          const positions = nodePositions(liveCluster.nodes.length);
+          const pm = new Map(liveCluster.nodes.map((n, i) => [n.id, positions[i]]));
+          const srcPos = pm.get(sourceId), dstPos = pm.get(newNode.id);
+          if (srcPos && dstPos) kvSpawnPacket(srcPos.x, srcPos.y, dstPos.x, dstPos.y, '#f59e0b', 'AE', 0, undefined);
+        }
+        renderCluster();
+        if (step < CATCHUP_STEPS) {
+          setTimeout(catchupStep, stepDelay);
+        } else {
+          setTimeout(promoteNewNode, stepDelay);
+        }
+      }
+      setTimeout(catchupStep, stepDelay);
+    }
   });
 
   btnRemoveNode.addEventListener('click', () => {
@@ -1025,11 +1192,20 @@ const strings = {
       node.state === 'candidate' ? 'text-emerald-400' :
       node.state === 'dead' ? 'text-slate-500' : 'text-indigo-400';
 
-    const logHtml = node.log.length === 0
+    const snapshotRow = node.snapshotIndex >= 0
+      ? `<div class="flex items-center gap-2 text-xs font-mono py-0.5">
+           <span class="text-slate-600">…</span>
+           <span class="text-cyan-600">t${node.snapshotTerm}</span>
+           <span class="text-cyan-400 italic">[${strings.d_snapshot} @${node.snapshotIndex}]</span>
+           <span class="text-cyan-600">✓</span>
+         </div>`
+      : '';
+    const logOffset = node.snapshotIndex >= 0 ? node.snapshotIndex + 1 : 0;
+    const logHtml = node.log.length === 0 && node.snapshotIndex < 0
       ? `<span class="text-slate-600 text-xs">${strings.d_empty_log}</span>`
       : node.log.map((e, idx) => `
           <div class="flex items-center gap-2 text-xs font-mono py-0.5">
-            <span class="text-slate-600">[${idx}]</span>
+            <span class="text-slate-600">[${logOffset + idx}]</span>
             <span class="text-slate-400">t${e.term}</span>
             <span class="text-white">${e.command}</span>
             <span class="${e.committed ? 'text-green-500' : 'text-amber-500'}">${e.committed ? '✓' : '…'}</span>
@@ -1045,7 +1221,7 @@ const strings = {
         <div class="flex justify-between"><span class="text-slate-500">${strings.d_commit}</span><span class="text-slate-300">${node.commitIndex}</span></div>
         <div class="mt-2 pt-2 border-t border-slate-700">
           <div class="text-slate-500 mb-1">${strings.d_log}</div>
-          <div class="space-y-0.5">${logHtml}</div>
+          <div class="space-y-0.5">${snapshotRow}${logHtml}</div>
         </div>
       </div>
     `;
@@ -1098,7 +1274,8 @@ const strings = {
   function kvAnimateWrite(leaderId, followerIds, onDone) {
     const state = getLiveState();
     const positions = nodePositions(state.nodes.length);
-    const leaderPos = positions[leaderId - 1];
+    const posMap = new Map(state.nodes.map((n, i) => [n.id, positions[i]]));
+    const leaderPos = posMap.get(leaderId);
     if (!leaderPos) return;
 
     const ACK_COLOR = '#22d3ee';
@@ -1107,7 +1284,7 @@ const strings = {
       flashNode(leaderId);
       let completed = 0;
       followerIds.forEach((fid, i) => {
-        const fPos = positions[fid - 1];
+        const fPos = posMap.get(fid);
         if (!fPos) return;
         kvSpawnPacket(leaderPos.x, leaderPos.y, fPos.x, fPos.y, '#f59e0b', 'AE', i * 60, () => {
           flashNode(fid);
@@ -1131,14 +1308,28 @@ const strings = {
     }
   }
 
+  function kvAnimateRead(leaderId, onDone) {
+    const state = getLiveState();
+    const positions = nodePositions(state.nodes.length);
+    const posMap = new Map(state.nodes.map((n, i) => [n.id, positions[i]]));
+    const leaderPos = posMap.get(leaderId);
+    if (!leaderPos) { onDone?.(); return; }
+
+    // client → leader (read request), then leader → client (value response)
+    kvSpawnPacket(CLIENT_X, CLIENT_Y, leaderPos.x, leaderPos.y, '#38bdf8', 'read', 0, () => {
+      flashNode(leaderId);
+      kvSpawnPacket(leaderPos.x, leaderPos.y, CLIENT_X, CLIENT_Y, '#4ade80', 'val', 0, onDone);
+    });
+  }
+
   async function kvExecWrite(op, key, value) {
     const leader = kvCurrentLeader();
     if (!leader) { kvPrint(strings.kv_no_leader, 'text-red-400'); return; }
 
-    if (op === 'DEL' && !kvStore.has(key)) { kvPrint(`  ✗ key not found: ${key}`, 'text-amber-400'); return; }
+    if (op === 'DEL' && !kvStore.has(key)) { kvPrint(`${strings.kv_key_not_found}${key}`, 'text-amber-400'); return; }
 
     const command = op === 'SET' ? `SET ${key}=${value}` : `DEL ${key}`;
-    kvPrint(`  → leader N${leader.id} received ${op} ${op === 'SET' ? `${key} = ${value}` : key}`, 'text-sky-300');
+    kvPrint(`${strings.kv_leader_recv} N${leader.id}${strings.kv_received}${op} ${op === 'SET' ? `${key} = ${value}` : key}`, 'text-sky-300');
 
     const state = getLiveState();
     const leaderNode = state.nodes.find(n => n.id === leader.id);
@@ -1151,9 +1342,9 @@ const strings = {
 
     await new Promise(resolve => { kvAnimateWrite(leader.id, followers, resolve); });
 
-    kvPrint(`  → replicating to ${followers.map(id => `N${id}`).join(', ')}...`, 'text-sky-300');
+    kvPrint(`${strings.kv_replicating}${followers.map(id => `N${id}`).join(', ')}...`, 'text-sky-300');
     await new Promise(r => setTimeout(r, 120));
-    kvPrint(`  → majority ACK (${majority}/${state.nodes.length})`, 'text-sky-300');
+    kvPrint(`${strings.kv_majority_ack}${majority}/${state.nodes.length})`, 'text-sky-300');
     await new Promise(r => setTimeout(r, 80));
 
     state.nodes.forEach(n => {
@@ -1168,10 +1359,10 @@ const strings = {
 
     if (op === 'SET') {
       kvStore.set(key, value);
-      kvPrint(`  ✓ committed: ${key} = ${value}`, 'text-green-400');
+      kvPrint(`${strings.kv_committed_set}${key} = ${value}`, 'text-green-400');
     } else {
       kvStore.delete(key);
-      kvPrint(`  ✓ committed: deleted ${key}`, 'text-green-400');
+      kvPrint(`${strings.kv_committed_del}${key}`, 'text-green-400');
     }
 
     renderCluster();
@@ -1179,6 +1370,7 @@ const strings = {
       const nd = state.nodes.find(n => n.id === selectedNode);
       if (nd) renderNodeDetail(nd);
     }
+    maybeAutoCompact();
   }
 
   async function kvHandleCommand(raw) {
@@ -1191,28 +1383,28 @@ const strings = {
     if (cmd === 'clear') { kvOutput.innerHTML = ''; return; }
 
     if (cmd === 'help') {
-      kvPrint('  Commands:', 'text-slate-400');
-      kvPrint('    set <key> <value>   — write a key', 'text-slate-400');
-      kvPrint('    get <key>           — read a key from leader', 'text-slate-400');
-      kvPrint('    del <key>           — delete a key', 'text-slate-400');
-      kvPrint('    keys                — list all committed keys', 'text-slate-400');
-      kvPrint('    state               — show cluster state', 'text-slate-400');
-      kvPrint('    clear               — clear terminal', 'text-slate-400');
-      kvPrint('    help                — this message', 'text-slate-400');
+      kvPrint(strings.kv_help_header, 'text-slate-400');
+      kvPrint(strings.kv_help_set,    'text-slate-400');
+      kvPrint(strings.kv_help_get,    'text-slate-400');
+      kvPrint(strings.kv_help_del,    'text-slate-400');
+      kvPrint(strings.kv_help_keys,   'text-slate-400');
+      kvPrint(strings.kv_help_state,  'text-slate-400');
+      kvPrint(strings.kv_help_clear,  'text-slate-400');
+      kvPrint(strings.kv_help_help,   'text-slate-400');
       return;
     }
 
     if (cmd === 'keys') {
-      if (kvStore.size === 0) { kvPrint('  (empty store)', 'text-slate-500'); }
+      if (kvStore.size === 0) { kvPrint(strings.kv_empty_store, 'text-slate-500'); }
       else { for (const [k, v] of kvStore) kvPrint(`  ${k} = ${v}`, 'text-slate-300'); }
       return;
     }
 
     if (cmd === 'state') {
       const state = getLiveState();
-      kvPrint(`  cluster term: ${state.term}`, 'text-slate-300');
+      kvPrint(`${strings.kv_cluster_term}${state.term}`, 'text-slate-300');
       for (const n of state.nodes) {
-        const role = n.state === 'leader' ? ' [LEADER]' : n.state === 'dead' ? ' [DEAD]' : '';
+        const role = n.state === 'leader' ? strings.kv_role_leader : n.state === 'dead' ? strings.kv_role_dead : '';
         kvPrint(`  N${n.id}: ${n.state}${role}  term=${n.term}  log=${n.log.length}  commit=${n.commitIndex}`, 'text-slate-300');
       }
       return;
@@ -1220,31 +1412,32 @@ const strings = {
 
     if (cmd === 'get') {
       const key = parts[1];
-      if (!key) { kvPrint('  usage: get <key>', 'text-amber-400'); return; }
+      if (!key) { kvPrint(strings.kv_usage_get, 'text-amber-400'); return; }
       const leader = kvCurrentLeader();
       if (!leader) { kvPrint(strings.kv_no_leader, 'text-red-400'); return; }
-      kvPrint(`  → reading from leader N${leader.id}`, 'text-sky-300');
+      kvPrint(`${strings.kv_reading_from} N${leader.id}`, 'text-sky-300');
+      await new Promise<void>(resolve => kvAnimateRead(leader.id, resolve));
       if (kvStore.has(key)) kvPrint(`  ${key} = ${kvStore.get(key)}`, 'text-green-300');
-      else kvPrint(`  ✗ key not found: ${key}`, 'text-amber-400');
+      else kvPrint(`${strings.kv_key_not_found}${key}`, 'text-amber-400');
       return;
     }
 
     if (cmd === 'set') {
       const key = parts[1];
       const value = parts.slice(2).join(' ');
-      if (!key || !value) { kvPrint('  usage: set <key> <value>', 'text-amber-400'); return; }
+      if (!key || !value) { kvPrint(strings.kv_usage_set, 'text-amber-400'); return; }
       await kvExecWrite('SET', key, value);
       return;
     }
 
     if (cmd === 'del') {
       const key = parts[1];
-      if (!key) { kvPrint('  usage: del <key>', 'text-amber-400'); return; }
+      if (!key) { kvPrint(strings.kv_usage_del, 'text-amber-400'); return; }
       await kvExecWrite('DEL', key);
       return;
     }
 
-    kvPrint(`  ✗ unknown command: ${cmd}  (type help)`, 'text-red-400');
+    kvPrint(`${strings.kv_unknown_cmd}${cmd}  (type help)`, 'text-red-400');
   }
 
   kvPrint(strings.kv_welcome1, 'text-slate-500');
@@ -1315,18 +1508,19 @@ const strings = {
     if (cmd === 'clear') { adminOutput.innerHTML = ''; return; }
 
     if (cmd === 'help') {
-      adminPrint('  Commands:', 'text-slate-400');
-      adminPrint('    kill <nodeId>          — crash a node (e.g. kill N3)', 'text-slate-400');
-      adminPrint('    revive <nodeId>        — bring a dead node back as follower', 'text-slate-400');
-      adminPrint('    partition <ids>        — isolate nodes (e.g. partition N1,N2)', 'text-slate-400');
-      adminPrint('    heal                   — remove all partitions', 'text-slate-400');
-      adminPrint('    quorum                 — quorum status', 'text-slate-400');
-      adminPrint('    leader                 — current leader and term', 'text-slate-400');
-      adminPrint('    term                   — current cluster term', 'text-slate-400');
-      adminPrint('    logs                   — log lengths for all nodes', 'text-slate-400');
-      adminPrint('    status                 — full cluster overview', 'text-slate-400');
-      adminPrint('    clear                  — clear terminal', 'text-slate-400');
-      adminPrint('    help                   — this message', 'text-slate-400');
+      adminPrint(strings.adm_help_header,  'text-slate-400');
+      adminPrint(strings.adm_help_kill,    'text-slate-400');
+      adminPrint(strings.adm_help_revive,  'text-slate-400');
+      adminPrint(strings.adm_help_part,    'text-slate-400');
+      adminPrint(strings.adm_help_heal,    'text-slate-400');
+      adminPrint(strings.adm_help_quorum,  'text-slate-400');
+      adminPrint(strings.adm_help_leader,  'text-slate-400');
+      adminPrint(strings.adm_help_term,    'text-slate-400');
+      adminPrint(strings.adm_help_logs,    'text-slate-400');
+      adminPrint(strings.adm_help_status,  'text-slate-400');
+      adminPrint(strings.adm_help_compact, 'text-slate-400');
+      adminPrint(strings.adm_help_clear,   'text-slate-400');
+      adminPrint(strings.adm_help_help,    'text-slate-400');
       return;
     }
 
@@ -1334,10 +1528,10 @@ const strings = {
 
     if (cmd === 'kill') {
       const id = adminParseNodeId(parts[1] ?? '');
-      if (!id) { adminPrint('  usage: kill <nodeId>  (e.g. kill N3)', 'text-amber-400'); return; }
+      if (!id) { adminPrint(strings.adm_usage_kill, 'text-amber-400'); return; }
       const node = state.nodes.find(n => n.id === id);
-      if (!node) { adminPrint(`  N${id} not found`, 'text-red-400'); return; }
-      if (node.state === 'dead') { adminPrint(`  N${id} is already dead`, 'text-amber-400'); return; }
+      if (!node) { adminPrint(`  N${id}${strings.adm_not_found}`, 'text-red-400'); return; }
+      if (node.state === 'dead') { adminPrint(`  N${id}${strings.adm_already_dead}`, 'text-amber-400'); return; }
       const wasLeader = node.state === 'leader';
       flashNodeColor(id, '#ef4444');
       await new Promise(r => setTimeout(r, 300));
@@ -1346,24 +1540,24 @@ const strings = {
       if (wasLeader && heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
       renderCluster();
       addLogEntry('leader_crash', wasLeader ? `N${id} (leader) crashed` : `N${id} crashed`);
-      adminPrint(`  ✗ N${id} is dead${wasLeader ? ' — leader lost' : ''}`, 'text-red-400');
+      adminPrint(`  ✗ N${id}${strings.adm_is_dead}${wasLeader ? strings.adm_leader_lost : ''}`, 'text-red-400');
 
       const liveNodes = state.nodes.filter(n => n.state !== 'dead' && !isolatedNodes.has(n.id));
       const majority = Math.floor(state.nodes.length / 2) + 1;
       if (liveNodes.length < majority) {
-        adminPrint('  ✗ quorum lost — cluster unavailable', 'text-red-400');
+        adminPrint(strings.adm_quorum_lost, 'text-red-400');
       } else {
-        adminPrint(`  quorum intact — ${liveNodes.length}/${state.nodes.length} alive`, 'text-slate-400');
+        adminPrint(`${strings.adm_quorum_intact}${liveNodes.length}/${state.nodes.length}${strings.adm_alive_suffix}`, 'text-slate-400');
       }
       return;
     }
 
     if (cmd === 'revive') {
       const id = adminParseNodeId(parts[1] ?? '');
-      if (!id) { adminPrint('  usage: revive <nodeId>  (e.g. revive N3)', 'text-amber-400'); return; }
+      if (!id) { adminPrint(strings.adm_usage_revive, 'text-amber-400'); return; }
       const node = state.nodes.find(n => n.id === id);
-      if (!node) { adminPrint(`  N${id} not found`, 'text-red-400'); return; }
-      if (node.state !== 'dead') { adminPrint(`  N${id} is not dead (state: ${node.state})`, 'text-amber-400'); return; }
+      if (!node) { adminPrint(`  N${id}${strings.adm_not_found}`, 'text-red-400'); return; }
+      if (node.state !== 'dead') { adminPrint(`  N${id}${strings.adm_not_dead}${node.state})`, 'text-amber-400'); return; }
       const currentTerm = Math.max(...state.nodes.map(n => n.term));
       node.state = 'follower';
       node.term = currentTerm;
@@ -1374,22 +1568,23 @@ const strings = {
       renderCluster();
       flashNodeColor(id, '#22c55e');
       addLogEntry('node_recover', `N${id} revived as follower (term ${currentTerm})`);
-      adminPrint(`  ✓ N${id} rejoined as follower (term ${currentTerm})`, 'text-green-400');
+      adminPrint(`${strings.adm_rejoined}N${id}${strings.adm_rejoined_as}${currentTerm})`, 'text-green-400');
       return;
     }
 
     if (cmd === 'partition') {
       const ids = parts.slice(1).map(p => adminParseNodeId(p)).filter(Boolean);
-      if (ids.length === 0) { adminPrint('  usage: partition N1,N2  (comma or space separated)', 'text-amber-400'); return; }
+      if (ids.length === 0) { adminPrint(strings.adm_usage_part, 'text-amber-400'); return; }
       for (const id of ids) {
-        if (!state.nodes.find(n => n.id === id)) { adminPrint(`  N${id} not found — skipped`, 'text-amber-400'); continue; }
+        if (!state.nodes.find(n => n.id === id)) { adminPrint(`  N${id}${strings.adm_skipped}`, 'text-amber-400'); continue; }
         isolatedNodes.add(id);
-        adminPrint(`  N${id} isolated — packets to/from this node will be dropped`, 'text-red-400');
+        adminPrint(`  N${id}${strings.adm_isolated}`, 'text-red-400');
         const positions = nodePositions(state.nodes.length);
+        const posMap = new Map(state.nodes.map((n, i) => [n.id, positions[i]]));
         for (const other of state.nodes) {
           if (other.id === id || other.state === 'dead' || isolatedNodes.has(other.id)) continue;
-          const fromPos = positions[other.id - 1];
-          const toPos = positions[id - 1];
+          const fromPos = posMap.get(other.id);
+          const toPos = posMap.get(id);
           if (!fromPos || !toPos) continue;
           const midX = (fromPos.x + toPos.x) / 2;
           const midY = (fromPos.y + toPos.y) / 2;
@@ -1408,11 +1603,11 @@ const strings = {
     }
 
     if (cmd === 'heal') {
-      if (isolatedNodes.size === 0) { adminPrint('  no active partitions', 'text-slate-500'); return; }
+      if (isolatedNodes.size === 0) { adminPrint(strings.adm_no_partitions, 'text-slate-500'); return; }
       const healed = [...isolatedNodes].map(id => `N${id}`).join(', ');
       isolatedNodes.clear();
       renderCluster();
-      adminPrint(`  partition healed — restored: ${healed}`, 'text-green-400');
+      adminPrint(`${strings.adm_healed}${healed}`, 'text-green-400');
       return;
     }
 
@@ -1421,27 +1616,27 @@ const strings = {
       const alive = state.nodes.filter(n => n.state !== 'dead').length;
       const majority = Math.floor(total / 2) + 1;
       const hasQuorum = alive >= majority;
-      adminPrint(`  total nodes : ${total}`, 'text-slate-300');
-      adminPrint(`  alive       : ${alive}`, 'text-slate-300');
-      adminPrint(`  majority    : ${majority}`, 'text-slate-300');
-      adminPrint(`  quorum      : ${hasQuorum ? 'YES' : 'NO'}`, hasQuorum ? 'text-green-400' : 'text-red-400');
+      adminPrint(`${strings.adm_total_nodes}${total}`, 'text-slate-300');
+      adminPrint(`${strings.adm_alive}${alive}`, 'text-slate-300');
+      adminPrint(`${strings.adm_majority}${majority}`, 'text-slate-300');
+      adminPrint(`${strings.adm_quorum_label}${hasQuorum ? 'YES' : 'NO'}`, hasQuorum ? 'text-green-400' : 'text-red-400');
       return;
     }
 
     if (cmd === 'leader') {
       const leader = state.nodes.find(n => n.state === 'leader');
-      if (!leader) { adminPrint('  no leader — cluster in election or all dead', 'text-red-400'); return; }
-      adminPrint(`  leader: N${leader.id}  (term ${leader.term})`, 'text-amber-300');
+      if (!leader) { adminPrint(strings.adm_no_leader, 'text-red-400'); return; }
+      adminPrint(`${strings.adm_leader_label}N${leader.id}  (term ${leader.term})`, 'text-amber-300');
       return;
     }
 
     if (cmd === 'term') {
-      adminPrint(`  cluster term: ${state.term}`, 'text-slate-300');
+      adminPrint(`${strings.adm_cluster_term}${state.term}`, 'text-slate-300');
       return;
     }
 
     if (cmd === 'logs') {
-      adminPrint('  node   log   commitIndex  state', 'text-slate-500');
+      adminPrint(strings.adm_logs_header, 'text-slate-500');
       adminPrint('  ──────────────────────────────', 'text-slate-700');
       for (const n of state.nodes) {
         const row = `  N${String(n.id).padEnd(4)} ${String(n.log.length).padEnd(5)}  ${String(n.commitIndex).padEnd(11)}  ${n.state}`;
@@ -1457,13 +1652,13 @@ const strings = {
       const alive = state.nodes.filter(n => n.state !== 'dead').length;
       const majority = Math.floor(total / 2) + 1;
       const hasQuorum = alive >= majority;
-      adminPrint(`  cluster term : ${state.term}`, 'text-slate-300');
-      adminPrint(`  leader       : ${leader ? `N${leader.id} (term ${leader.term})` : 'none'}`, leader ? 'text-amber-300' : 'text-red-400');
-      adminPrint(`  quorum       : ${alive}/${total} alive — majority ${majority} — ${hasQuorum ? 'OK' : 'LOST'}`, hasQuorum ? 'text-green-400' : 'text-red-400');
-      if (isolatedNodes.size > 0) adminPrint(`  partitioned  : ${[...isolatedNodes].map(id => `N${id}`).join(', ')}`, 'text-red-400');
+      adminPrint(`${strings.adm_status_term}${state.term}`, 'text-slate-300');
+      adminPrint(`${strings.adm_status_leader}${leader ? `N${leader.id} (term ${leader.term})` : strings.adm_status_none}`, leader ? 'text-amber-300' : 'text-red-400');
+      adminPrint(`${strings.adm_status_quorum}${alive}/${total}${strings.adm_alive_s}${majority}${hasQuorum ? strings.adm_ok : strings.adm_lost}`, hasQuorum ? 'text-green-400' : 'text-red-400');
+      if (isolatedNodes.size > 0) adminPrint(`${strings.adm_partitioned}${[...isolatedNodes].map(id => `N${id}`).join(', ')}`, 'text-red-400');
       adminPrint('  ──────────────────────────────', 'text-slate-700');
       for (const n of state.nodes) {
-        const isolated = isolatedNodes.has(n.id) ? ' [ISOLATED]' : '';
+        const isolated = isolatedNodes.has(n.id) ? strings.adm_isolated_tag : '';
         const row = `  N${n.id}: ${n.state}${isolated}  term=${n.term}  log=${n.log.length}  commit=${n.commitIndex}`;
         const cls = n.state === 'dead' ? 'text-slate-500' : n.state === 'leader' ? 'text-amber-300' : isolatedNodes.has(n.id) ? 'text-red-300' : 'text-slate-300';
         adminPrint(row, cls);
@@ -1471,7 +1666,30 @@ const strings = {
       return;
     }
 
-    adminPrint(`  unknown command: ${cmd}  (type help)`, 'text-red-400');
+    if (cmd === 'compact') {
+      let anyCompacted = false;
+      let maxSnapIdx = -1;
+      for (const node of state.nodes) {
+        if (node.state !== 'dead' && node.commitIndex >= 0) {
+          if (compactNode(node)) { anyCompacted = true; maxSnapIdx = Math.max(maxSnapIdx, node.snapshotIndex); }
+        }
+      }
+      if (anyCompacted) {
+        setNarration('entry_committed', strings.n_compacting);
+        renderCluster();
+        adminPrint(`${strings.adm_compact_done}${maxSnapIdx}`, 'text-cyan-400');
+        for (const node of state.nodes) {
+          if (node.snapshotIndex >= 0) {
+            adminPrint(`  N${node.id}: ${strings.adm_snap_label}${node.snapshotIndex}  log=${node.log.length}`, 'text-cyan-300');
+          }
+        }
+      } else {
+        adminPrint(strings.adm_compact_none, 'text-slate-500');
+      }
+      return;
+    }
+
+    adminPrint(`${strings.adm_unknown_cmd}${cmd}${strings.adm_type_help}`, 'text-red-400');
   }
 
   adminPrint(strings.adm_welcome1, 'text-slate-500');

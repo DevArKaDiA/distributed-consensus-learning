@@ -33,6 +33,15 @@ export const es: Translations = {
     ],
     paxos_title: '¿Por qué Raft y no Paxos?',
     paxos_body: 'Paxos fue el algoritmo de consenso dominante durante décadas, pero es notoriamente difícil de entender e implementar correctamente. Raft fue diseñado explícitamente para la <strong>comprensibilidad</strong> — sus autores hicieron estudios que mostraron que los estudiantes lo aprenden significativamente más rápido. Por eso tanta infraestructura moderna elige Raft.',
+    ack_title: 'Agradecimientos',
+    ack_intro: 'Este sitio fue construido sobre el trabajo de estos recursos:',
+    ack_sources: [
+      { label: 'Paper original de Raft', detail: '"In Search of an Understandable Consensus Algorithm" — Diego Ongaro & John Ousterhout', href: 'https://raft.github.io/raft.pdf' },
+      { label: 'Sitio web de Raft', detail: 'raft.github.io — referencia canónica y enlaces de visualización', href: 'https://raft.github.io' },
+      { label: 'Raftscope', detail: 'Visualización interactiva de Raft por Diego Ongaro', href: 'https://github.com/ongardie/raftscope' },
+      { label: 'Documentación de etcd', detail: 'etcd.io — implementación de Raft en producción y documentación', href: 'https://etcd.io/docs/' },
+      { label: 'MIT 6.824 Sistemas Distribuidos', detail: 'Notas de clase y laboratorios de Robert Morris et al.', href: 'https://pdos.csail.mit.edu/6.824/' },
+    ],
   },
 
   cluster: {
@@ -160,6 +169,14 @@ export const es: Translations = {
     legend_candidate: 'Candidato',
     legend_leader: 'Líder',
     legend_dead: 'Caído',
+  },
+
+  // Code page
+  code: {
+    ack_title: 'Agradecimientos',
+    ack_desc: 'Los ejemplos de código implementan el algoritmo descrito en este paper.',
+    prev: '← En Producción',
+    next: 'Siguiente: Recursos →',
   },
 
   ack: {
