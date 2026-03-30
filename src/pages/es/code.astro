@@ -378,6 +378,520 @@ if (acks > nodes.length / 2) {
   console.log(\`[N0] kv store:\`, Object.fromEntries(nodes[0].kvStore));
 }
 `;
+
+const goCode = `// raft.go — Minimal Raft node (Go)
+// Idiomatic Go: structs, methods, channels for simulation.
+// Not production-ready — no real networking, no persistence.
+
+package main
+
+import "fmt"
+
+// ── Types ──────────────────────────────────────────────────────────────────
+
+type State int
+
+const (
+	Follower  State = iota
+	Candidate State = iota
+	Leader    State = iota
+)
+
+func (s State) String() string {
+	return [...]string{"follower", "candidate", "leader"}[s]
+}
+
+type LogEntry struct {
+	Term    int
+	Command string
+}
+
+type RaftNode struct {
+	ID    int
+	Peers []*RaftNode
+
+	// Persistent state (must survive crashes — write to disk in production)
+	CurrentTerm int
+	VotedFor    int // -1 means "not voted"
+	Log         []LogEntry
+
+	// Volatile state
+	State       State
+	CommitIndex int // highest log index known to be committed
+	LastApplied int // highest log index applied to state machine
+
+	// Leader-only (reinitialized after election)
+	NextIndex  map[int]int // for each peer: next log index to send
+	MatchIndex map[int]int // for each peer: highest replicated index confirmed
+
+	// Toy state machine
+	KVStore map[string]string
+}
+
+func NewNode(id int) *RaftNode {
+	return &RaftNode{
+		ID:          id,
+		VotedFor:    -1,
+		CommitIndex: -1,
+		LastApplied: -1,
+		NextIndex:   make(map[int]int),
+		MatchIndex:  make(map[int]int),
+		KVStore:     make(map[string]string),
+	}
+}
+
+// ── RPCs ───────────────────────────────────────────────────────────────────
+
+type RequestVoteArgs struct {
+	CandidateTerm int
+	CandidateID   int
+	LastLogIndex  int
+	LastLogTerm   int
+}
+
+type AppendEntriesArgs struct {
+	LeaderTerm   int
+	LeaderID     int
+	PrevLogIndex int // index of entry before the new ones
+	PrevLogTerm  int // term at PrevLogIndex
+	Entries      []LogEntry
+	LeaderCommit int
+}
+
+// RequestVote decides whether to grant a vote to a candidate.
+func (n *RaftNode) RequestVote(args RequestVoteArgs) bool {
+	if args.CandidateTerm < n.CurrentTerm {
+		return false // stale candidate
+	}
+
+	// Seeing a higher term: revert to follower
+	if args.CandidateTerm > n.CurrentTerm {
+		n.CurrentTerm = args.CandidateTerm
+		n.VotedFor = -1
+		n.State = Follower
+	}
+
+	alreadyVoted := n.VotedFor != -1 && n.VotedFor != args.CandidateID
+	if alreadyVoted {
+		return false
+	}
+
+	// Log up-to-date check (§5.4.1)
+	myLastTerm, myLastIndex := n.lastLogTermIndex()
+	logOK := args.LastLogTerm > myLastTerm ||
+		(args.LastLogTerm == myLastTerm && args.LastLogIndex >= myLastIndex)
+
+	if logOK {
+		n.VotedFor = args.CandidateID
+		return true
+	}
+	return false
+}
+
+// AppendEntries handles both heartbeats (Entries=nil) and log replication.
+func (n *RaftNode) AppendEntries(args AppendEntriesArgs) bool {
+	if args.LeaderTerm < n.CurrentTerm {
+		return false
+	}
+
+	// Valid leader — update term and revert to follower
+	n.CurrentTerm = args.LeaderTerm
+	n.State = Follower
+	n.VotedFor = -1
+
+	// Consistency check: does our log match at PrevLogIndex?
+	if args.PrevLogIndex >= 0 {
+		if len(n.Log) <= args.PrevLogIndex {
+			return false // we're missing entries
+		}
+		if n.Log[args.PrevLogIndex].Term != args.PrevLogTerm {
+			n.Log = n.Log[:args.PrevLogIndex] // delete conflicting suffix
+			return false
+		}
+	}
+
+	// Append new entries, skipping duplicates
+	for i, entry := range args.Entries {
+		idx := args.PrevLogIndex + 1 + i
+		if idx < len(n.Log) {
+			if n.Log[idx].Term != entry.Term {
+				n.Log = n.Log[:idx] // truncate conflicting suffix
+				n.Log = append(n.Log, entry)
+			}
+			// else: already have this entry, skip
+		} else {
+			n.Log = append(n.Log, entry)
+		}
+	}
+
+	// Advance commit index
+	if args.LeaderCommit > n.CommitIndex {
+		n.CommitIndex = min(args.LeaderCommit, len(n.Log)-1)
+		n.applyCommitted()
+	}
+
+	return true
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+func (n *RaftNode) BecomeCandidate() {
+	n.State = Candidate
+	n.CurrentTerm++
+	n.VotedFor = n.ID
+	fmt.Printf("[N%d] → candidate (term %d)\\n", n.ID, n.CurrentTerm)
+}
+
+func (n *RaftNode) lastLogTermIndex() (term int, index int) {
+	if len(n.Log) == 0 {
+		return 0, -1
+	}
+	last := len(n.Log) - 1
+	return n.Log[last].Term, last
+}
+
+func (n *RaftNode) applyCommitted() {
+	for n.LastApplied < n.CommitIndex {
+		n.LastApplied++
+		n.execute(n.Log[n.LastApplied].Command)
+	}
+}
+
+// execute is a toy KV state machine.
+func (n *RaftNode) execute(command string) {
+	var op, kv string
+	fmt.Sscanf(command, "%s %s", &op, &kv)
+	switch op {
+	case "SET":
+		var k, v string
+		fmt.Sscanf(kv, "%[^=]=%s", &k, &v)
+		n.KVStore[k] = v
+	case "DEL":
+		delete(n.KVStore, kv)
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// ── Simulation ─────────────────────────────────────────────────────────────
+
+func main() {
+	// Build a 5-node cluster
+	nodes := make([]*RaftNode, 5)
+	for i := range nodes {
+		nodes[i] = NewNode(i)
+	}
+	for _, n := range nodes {
+		for _, p := range nodes {
+			if p.ID != n.ID {
+				n.Peers = append(n.Peers, p)
+			}
+		}
+	}
+
+	// N0 runs an election
+	leader := nodes[0]
+	leader.BecomeCandidate()
+
+	votes := 1 // self-vote
+	lastTerm, lastIdx := leader.lastLogTermIndex()
+	for _, peer := range leader.Peers {
+		if peer.RequestVote(RequestVoteArgs{
+			CandidateTerm: leader.CurrentTerm,
+			CandidateID:   leader.ID,
+			LastLogIndex:  lastIdx,
+			LastLogTerm:   lastTerm,
+		}) {
+			votes++
+		}
+	}
+
+	if votes > len(nodes)/2 {
+		leader.State = Leader
+		fmt.Printf("[N%d] → leader (term %d, votes %d/%d)\\n",
+			leader.ID, leader.CurrentTerm, votes, len(nodes))
+	}
+
+	// Replicate a command
+	entry := LogEntry{Term: leader.CurrentTerm, Command: "SET x=42"}
+	leader.Log = append(leader.Log, entry)
+
+	acks := 1
+	for _, peer := range leader.Peers {
+		if peer.AppendEntries(AppendEntriesArgs{
+			LeaderTerm:   leader.CurrentTerm,
+			LeaderID:     leader.ID,
+			PrevLogIndex: -1,
+			PrevLogTerm:  0,
+			Entries:      []LogEntry{entry},
+			LeaderCommit: leader.CommitIndex,
+		}) {
+			acks++
+		}
+	}
+
+	if acks > len(nodes)/2 {
+		leader.CommitIndex = 0
+		leader.applyCommitted()
+		fmt.Printf("[N%d] committed: %q\\n", leader.ID, entry.Command)
+		fmt.Printf("[N%d] kv store: %v\\n", leader.ID, leader.KVStore)
+	}
+}`;
+
+const rustCode = `// raft.rs — Minimal Raft node (Rust)
+// Ownership makes the state explicit: persistent fields vs volatile.
+// Uses enums with derive macros and Option<u32> for nullable fields.
+// Not production-ready — no async, no real networking, no persistence.
+
+use std::collections::HashMap;
+
+// ── Types ──────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq)]
+enum State {
+    Follower,
+    Candidate,
+    Leader,
+}
+
+#[derive(Debug, Clone)]
+struct LogEntry {
+    term: u32,
+    command: String,
+}
+
+struct RaftNode {
+    id: u32,
+
+    // Persistent state (must be written to stable storage before responding)
+    current_term: u32,
+    voted_for: Option<u32>, // None = not voted this term
+    log: Vec<LogEntry>,
+
+    // Volatile state
+    state: State,
+    commit_index: i64, // -1 = none committed yet
+    last_applied: i64,
+
+    // Toy state machine
+    kv_store: HashMap<String, String>,
+}
+
+impl RaftNode {
+    fn new(id: u32) -> Self {
+        RaftNode {
+            id,
+            current_term: 0,
+            voted_for: None,
+            log: Vec::new(),
+            state: State::Follower,
+            commit_index: -1,
+            last_applied: -1,
+            kv_store: HashMap::new(),
+        }
+    }
+
+    // ── Core state transitions ───────────────────────────────────────────
+
+    fn become_candidate(&mut self) {
+        self.state = State::Candidate;
+        self.current_term += 1;
+        self.voted_for = Some(self.id); // vote for self
+        println!("[N{}] → candidate (term {})", self.id, self.current_term);
+    }
+
+    // ── RPCs ─────────────────────────────────────────────────────────────
+
+    fn request_vote(
+        &mut self,
+        candidate_term: u32,
+        candidate_id: u32,
+        last_log_index: i64,
+        last_log_term: u32,
+    ) -> bool {
+        if candidate_term < self.current_term {
+            return false; // stale candidate
+        }
+
+        // Higher term seen — revert to follower
+        if candidate_term > self.current_term {
+            self.current_term = candidate_term;
+            self.voted_for = None;
+            self.state = State::Follower;
+        }
+
+        let already_voted = matches!(self.voted_for, Some(v) if v != candidate_id);
+        if already_voted {
+            return false;
+        }
+
+        // Log up-to-date check (§5.4.1 of the paper)
+        let (my_last_term, my_last_index) = self.last_log_term_index();
+        let log_ok = last_log_term > my_last_term
+            || (last_log_term == my_last_term && last_log_index >= my_last_index);
+
+        if log_ok {
+            self.voted_for = Some(candidate_id);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn append_entries(
+        &mut self,
+        leader_term: u32,
+        _leader_id: u32,
+        prev_log_index: i64,
+        prev_log_term: u32,
+        entries: &[LogEntry],
+        leader_commit: i64,
+    ) -> bool {
+        if leader_term < self.current_term {
+            return false;
+        }
+
+        self.current_term = leader_term;
+        self.state = State::Follower;
+        self.voted_for = None;
+
+        // Consistency check
+        if prev_log_index >= 0 {
+            let idx = prev_log_index as usize;
+            if self.log.len() <= idx {
+                return false; // missing entries
+            }
+            if self.log[idx].term != prev_log_term {
+                self.log.truncate(idx); // delete conflicting suffix
+                return false;
+            }
+        }
+
+        // Append entries, skipping duplicates
+        for (i, entry) in entries.iter().enumerate() {
+            let idx = (prev_log_index + 1 + i as i64) as usize;
+            if idx < self.log.len() {
+                if self.log[idx].term != entry.term {
+                    self.log.truncate(idx);
+                    self.log.push(entry.clone());
+                }
+                // else: already have this entry
+            } else {
+                self.log.push(entry.clone());
+            }
+        }
+
+        // Advance commit and apply
+        if leader_commit > self.commit_index {
+            self.commit_index = leader_commit.min(self.log.len() as i64 - 1);
+            self.apply_committed();
+        }
+
+        true
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────
+
+    fn last_log_term_index(&self) -> (u32, i64) {
+        match self.log.last() {
+            Some(e) => (e.term, self.log.len() as i64 - 1),
+            None => (0, -1),
+        }
+    }
+
+    fn apply_committed(&mut self) {
+        while self.last_applied < self.commit_index {
+            self.last_applied += 1;
+            let cmd = self.log[self.last_applied as usize].command.clone();
+            self.execute(&cmd);
+        }
+    }
+
+    fn execute(&mut self, command: &str) {
+        let parts: Vec<&str> = command.splitn(3, ' ').collect();
+        match parts.as_slice() {
+            ["SET", kv] => {
+                if let Some((k, v)) = kv.split_once('=') {
+                    self.kv_store.insert(k.to_string(), v.to_string());
+                }
+            }
+            ["DEL", k] => {
+                self.kv_store.remove(*k);
+            }
+            _ => {}
+        }
+    }
+}
+
+// ── Simulation ─────────────────────────────────────────────────────────────
+// In real Raft, nodes communicate over a network.
+// Here we call methods directly to show the protocol logic clearly.
+
+fn main() {
+    let mut nodes: Vec<RaftNode> = (0..5).map(RaftNode::new).collect();
+
+    // N0 runs an election
+    nodes[0].become_candidate();
+
+    let (last_term, last_idx) = nodes[0].last_log_term_index();
+    let term = nodes[0].current_term;
+    let id = nodes[0].id;
+
+    let mut votes = 1u32; // self-vote
+    // Borrow checker: collect args first, then iterate peers
+    for i in 1..nodes.len() {
+        let granted = nodes[i].request_vote(term, id, last_idx, last_term);
+        if granted {
+            votes += 1;
+        }
+    }
+
+    if votes as usize > nodes.len() / 2 {
+        nodes[0].state = State::Leader;
+        println!(
+            "[N{}] → leader (term {}, votes {}/{})",
+            nodes[0].id, nodes[0].current_term, votes, nodes.len()
+        );
+    }
+
+    // Replicate a command
+    let entry = LogEntry {
+        term: nodes[0].current_term,
+        command: "SET x=42".to_string(),
+    };
+    nodes[0].log.push(entry.clone());
+
+    let leader_term = nodes[0].current_term;
+    let leader_id = nodes[0].id;
+    let leader_commit = nodes[0].commit_index;
+
+    let mut acks = 1u32;
+    for i in 1..nodes.len() {
+        let ok = nodes[i].append_entries(
+            leader_term,
+            leader_id,
+            -1,
+            0,
+            &[entry.clone()],
+            leader_commit,
+        );
+        if ok {
+            acks += 1;
+        }
+    }
+
+    if acks as usize > nodes.len() / 2 {
+        nodes[0].commit_index = 0;
+        nodes[0].apply_committed();
+        println!("[N{}] committed: {:?}", nodes[0].id, entry.command);
+        println!("[N{}] kv store: {:?}", nodes[0].id, nodes[0].kv_store);
+    }
+}`;
 ---
 <Base title="Code" lang={lang} description="Minimal Raft implementations in Python, TypeScript, Go, and Rust — annotated for learning.">
 
@@ -425,18 +939,20 @@ if (acks > nodes.length / 2) {
 
     <!-- Go -->
     <div id="code-go" class="lang-panel hidden">
-      <div class="bg-slate-900 rounded-xl border border-slate-700 p-8 text-center">
-        <p class="text-slate-400 mb-2">Go implementation coming soon</p>
-        <p class="text-slate-500 text-sm">Will demonstrate idiomatic Go: goroutines for timers, channels for RPCs, and struct embedding for the Raft state.</p>
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-sm text-slate-400">~180 lines · idiomatic structs, methods, map for KV state machine</span>
+        <button class="copy-btn px-3 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition" data-target="go-code">Copy</button>
       </div>
+      <pre id="go-code" class="bg-slate-950 rounded-xl border border-slate-700 p-5 text-xs font-mono text-slate-300 overflow-x-auto overflow-y-auto max-h-[600px] leading-relaxed whitespace-pre">{goCode}</pre>
     </div>
 
     <!-- Rust -->
     <div id="code-rust" class="lang-panel hidden">
-      <div class="bg-slate-900 rounded-xl border border-slate-700 p-8 text-center">
-        <p class="text-slate-400 mb-2">Rust implementation coming soon</p>
-        <p class="text-slate-500 text-sm">Will demonstrate ownership model for log entries, async/await for RPCs, and how TiKV's openraft library approaches the design.</p>
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-sm text-slate-400">~220 lines · ownership makes state persistence explicit, Option for nullable fields</span>
+        <button class="copy-btn px-3 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition" data-target="rust-code">Copy</button>
       </div>
+      <pre id="rust-code" class="bg-slate-950 rounded-xl border border-slate-700 p-5 text-xs font-mono text-slate-300 overflow-x-auto overflow-y-auto max-h-[600px] leading-relaxed whitespace-pre">{rustCode}</pre>
     </div>
   </section>
 
