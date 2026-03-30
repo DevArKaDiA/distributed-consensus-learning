@@ -1096,33 +1096,64 @@ const tv = t.visualizer;
       return;
     }
 
-    const cmd = op === 'SET' ? `${key} = ${value}` : key;
-    kvPrint(`  → leader N${leader.id} received ${op} ${cmd}`, 'text-sky-300');
+    // Validate DEL before animating
+    if (op === 'DEL' && !kvStore.has(key)) {
+      kvPrint(`  ✗ key not found: ${key}`, 'text-amber-400');
+      return;
+    }
 
-    const state = events[cursor < 0 ? 0 : cursor].state;
-    const followers = state.nodes.filter(n => n.state === 'follower').map(n => n.id);
-    const majority = Math.floor((state.nodes.length) / 2) + 1;
+    const command = op === 'SET' ? `SET ${key}=${value}` : `DEL ${key}`;
+    kvPrint(`  → leader N${leader.id} received ${op} ${op === 'SET' ? `${key} = ${value}` : key}`, 'text-sky-300');
 
-    // Fire the full animation: client→leader→followers→ACKs→commit
+    // ── Step 1: append entry (pending) to all live nodes ──────────────────────
+    const idx = events[cursor < 0 ? 0 : cursor];
+    const liveState = idx.state;
+    const leaderNode = liveState.nodes.find(n => n.id === leader.id)!;
+    const newTerm = leaderNode.term;
+    const newEntry = { term: newTerm, command, committed: false };
+
+    liveState.nodes.forEach(n => {
+      if (n.state !== 'dead') n.log.push({ ...newEntry });
+    });
+    renderCluster(liveState);
+
+    const followers = liveState.nodes.filter(n => n.state === 'follower').map(n => n.id);
+    const majority = Math.floor(liveState.nodes.length / 2) + 1;
+
+    // ── Step 2: animate client→leader→followers→ACKs→commit ──────────────────
     await new Promise<void>(resolve => {
       kvAnimateWrite(leader.id, followers, resolve);
     });
 
     kvPrint(`  → replicating to ${followers.map(id => `N${id}`).join(', ')}...`, 'text-sky-300');
     await new Promise(r => setTimeout(r, 120));
-    kvPrint(`  → majority ACK (${majority}/${state.nodes.length})`, 'text-sky-300');
+    kvPrint(`  → majority ACK (${majority}/${liveState.nodes.length})`, 'text-sky-300');
     await new Promise(r => setTimeout(r, 80));
+
+    // ── Step 3: commit — mark entry committed on all live nodes ──────────────
+    liveState.nodes.forEach(n => {
+      if (n.state !== 'dead') {
+        const entry = n.log[n.log.length - 1];
+        if (entry && !entry.committed && entry.command === command) {
+          entry.committed = true;
+          n.commitIndex = n.log.length - 1;
+        }
+      }
+    });
 
     if (op === 'SET') {
       kvStore.set(key, value!);
       kvPrint(`  ✓ committed: ${key} = ${value}`, 'text-green-400');
     } else {
-      if (kvStore.has(key)) {
-        kvStore.delete(key);
-        kvPrint(`  ✓ committed: deleted ${key}`, 'text-green-400');
-      } else {
-        kvPrint(`  ✗ key not found: ${key}`, 'text-amber-400');
-      }
+      kvStore.delete(key);
+      kvPrint(`  ✓ committed: deleted ${key}`, 'text-green-400');
+    }
+
+    // ── Step 4: re-render cluster + refresh selected node detail ─────────────
+    renderCluster(liveState);
+    if (selectedNode !== null) {
+      const nd = liveState.nodes.find(n => n.id === selectedNode);
+      if (nd) renderNodeDetail(nd);
     }
   }
 
