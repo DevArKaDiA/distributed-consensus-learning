@@ -1251,12 +1251,37 @@ const strings = {
   kvPrint(strings.kv_welcome2, 'text-slate-500');
   kvPrint(strings.kv_welcome3, 'text-slate-600');
   kvTerminal.addEventListener('click', () => kvInput.focus());
-  kvInput.addEventListener('keydown', async (e) => {
-    if (e.key !== 'Enter') return;
-    const val = kvInput.value;
-    kvInput.value = '';
-    await kvHandleCommand(val);
-  });
+  function makeHistory(input: HTMLInputElement, handler: (cmd: string) => Promise<void>) {
+    const history: string[] = [];
+    let cursor = -1;
+    let draft = '';
+
+    input.addEventListener('keydown', async (e) => {
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (history.length === 0) return;
+        if (cursor === -1) draft = input.value;
+        cursor = Math.min(cursor + 1, history.length - 1);
+        input.value = history[cursor];
+        setTimeout(() => input.setSelectionRange(input.value.length, input.value.length), 0);
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (cursor === -1) return;
+        cursor--;
+        input.value = cursor === -1 ? draft : history[cursor];
+        setTimeout(() => input.setSelectionRange(input.value.length, input.value.length), 0);
+      } else if (e.key === 'Enter') {
+        const val = input.value.trim();
+        input.value = '';
+        cursor = -1;
+        draft = '';
+        if (val) history.unshift(val);
+        await handler(val);
+      }
+    });
+  }
+
+  makeHistory(kvInput, kvHandleCommand);
 
   // ─── Cluster Admin Shell ──────────────────────────────────────────────────────
 
@@ -1453,12 +1478,7 @@ const strings = {
   adminPrint(strings.adm_welcome2, 'text-amber-900/60');
   adminPrint(strings.adm_welcome3, 'text-slate-600');
   adminTerminal.addEventListener('click', () => adminInput.focus());
-  adminInput.addEventListener('keydown', async (e) => {
-    if (e.key !== 'Enter') return;
-    const val = adminInput.value;
-    adminInput.value = '';
-    await adminHandleCommand(val);
-  });
+  makeHistory(adminInput, adminHandleCommand);
 
   // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
