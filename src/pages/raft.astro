@@ -2,30 +2,30 @@
 import Base from '../layouts/Base.astro';
 const base = import.meta.env.BASE_URL;
 ---
-<Base title="How Raft Works" description="Leader election, log replication, and safety in the Raft consensus algorithm, with interactive animations.">
+<Base title="How Raft Works" description="Leader election, log replication, and safety in the Raft consensus algorithm, with interactive SVG animations.">
 
   <section class="max-w-4xl mx-auto px-4 pt-16 pb-8">
     <p class="text-sky-400 text-sm font-mono mb-3">Chapter 2</p>
     <h1 class="text-4xl font-bold text-white mb-4">How Raft Works</h1>
     <p class="text-slate-400 text-lg mb-6">
-      Raft decomposes the consensus problem into three sub-problems: leader election,
+      Raft decomposes consensus into three sub-problems: leader election,
       log replication, and safety. Each is understandable in isolation.
     </p>
-    <div class="flex gap-4 text-sm">
+    <div class="flex gap-3 text-sm flex-wrap">
       <a href="#leader-election" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">Leader Election</a>
       <a href="#log-replication" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">Log Replication</a>
       <a href="#safety" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">Safety</a>
     </div>
   </section>
 
-  <!-- Key insight -->
-  <section class="max-w-4xl mx-auto px-4 py-6">
+  <!-- Core insight -->
+  <section class="max-w-4xl mx-auto px-4 py-4">
     <div class="bg-sky-900/20 border border-sky-700/40 rounded-xl p-5">
       <h3 class="font-semibold text-sky-400 mb-2">Core insight: strong leader</h3>
       <p class="text-slate-400 text-sm leading-relaxed">
-        Raft uses a <strong class="text-slate-200">strong leader model</strong>. One node is always the
-        authoritative leader. All writes go through the leader. This simplifies the design enormously —
-        consistency flows from having a single source of truth at any given time.
+        Raft uses a <strong class="text-slate-200">strong leader model</strong>. One node is the
+        authoritative leader at all times. All writes go through the leader.
+        This simplifies design enormously — consistency flows from having a single source of truth.
       </p>
     </div>
   </section>
@@ -33,17 +33,16 @@ const base = import.meta.env.BASE_URL;
   <!-- Server states -->
   <section class="max-w-4xl mx-auto px-4 py-8">
     <h2 class="text-2xl font-bold text-white mb-4">Server states</h2>
-    <p class="text-slate-400 mb-6">Every Raft node is always in one of three states:</p>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div class="bg-slate-900 rounded-xl border border-yellow-700/50 p-5">
         <div class="w-8 h-8 rounded-full bg-yellow-500/20 border-2 border-yellow-500 flex items-center justify-center text-xs font-mono font-bold text-yellow-400 mb-3">L</div>
         <h4 class="font-semibold text-yellow-400 mb-1">Leader</h4>
-        <p class="text-slate-400 text-xs leading-relaxed">Handles all client requests. Replicates log entries to followers. Sends heartbeats to prevent elections.</p>
+        <p class="text-slate-400 text-xs leading-relaxed">Handles all client requests. Replicates log entries to followers. Sends heartbeats to prevent new elections.</p>
       </div>
       <div class="bg-slate-900 rounded-xl border border-indigo-700/50 p-5">
         <div class="w-8 h-8 rounded-full bg-indigo-500/20 border-2 border-indigo-500 flex items-center justify-center text-xs font-mono font-bold text-indigo-400 mb-3">F</div>
         <h4 class="font-semibold text-indigo-400 mb-1">Follower</h4>
-        <p class="text-slate-400 text-xs leading-relaxed">Passive. Responds to requests from leaders and candidates. If it hears nothing, it becomes a candidate.</p>
+        <p class="text-slate-400 text-xs leading-relaxed">Passive. Responds to leaders and candidates. Becomes a candidate if it hears nothing within the election timeout.</p>
       </div>
       <div class="bg-slate-900 rounded-xl border border-emerald-700/50 p-5">
         <div class="w-8 h-8 rounded-full bg-emerald-500/20 border-2 border-emerald-500 flex items-center justify-center text-xs font-mono font-bold text-emerald-400 mb-3">C</div>
@@ -58,29 +57,22 @@ const base = import.meta.env.BASE_URL;
     <h2 class="text-2xl font-bold text-white mb-4">Terms: logical time</h2>
     <p class="text-slate-400 mb-4 leading-relaxed">
       Raft divides time into <strong class="text-slate-200">terms</strong> — monotonically increasing integers.
-      Each term begins with an election. If a candidate wins, it serves as leader for that term.
-      If nobody wins (split vote), a new term begins immediately.
+      Each term begins with an election. If nobody wins (split vote), a new term begins immediately.
+      Nodes with a stale term immediately revert to follower.
     </p>
-    <div class="bg-slate-900 rounded-xl border border-slate-700 p-5 font-mono text-sm">
-      <div class="flex gap-1 items-center">
-        {[
-          { label: 'Term 1', color: 'bg-indigo-600', w: 'w-24', sub: 'Leader: N1' },
-          { label: 'Term 2', color: 'bg-red-700', w: 'w-10', sub: 'Split' },
-          { label: 'Term 3', color: 'bg-indigo-600', w: 'w-32', sub: 'Leader: N3' },
-          { label: 'Term 4', color: 'bg-indigo-600', w: 'w-20', sub: 'Leader: N2' },
-        ].map(t => (
-          <div class="flex flex-col items-center gap-1">
-            <div class={`${t.color} ${t.w} h-8 rounded flex items-center justify-center text-white text-xs px-1`}>{t.label}</div>
-            <span class="text-slate-500 text-xs">{t.sub}</span>
-          </div>
-        ))}
-      </div>
-      <p class="text-slate-500 text-xs mt-3">→ time</p>
+    <div class="bg-slate-900 rounded-xl border border-slate-700 p-5 font-mono text-sm overflow-x-auto">
+      <svg viewBox="0 0 500 60" class="w-full" style="height:60px">
+        <rect x="0"   y="10" width="130" height="30" rx="4" fill="#4f46e5" opacity="0.7"/>
+        <text x="65"  y="30" text-anchor="middle" fill="white" font-size="11" font-family="monospace">Term 1 — Leader: N1</text>
+        <rect x="134" y="10" width="50"  height="30" rx="4" fill="#7f1d1d" opacity="0.7"/>
+        <text x="159" y="30" text-anchor="middle" fill="#fca5a5" font-size="10" font-family="monospace">T2 split</text>
+        <rect x="188" y="10" width="150" height="30" rx="4" fill="#4f46e5" opacity="0.7"/>
+        <text x="263" y="30" text-anchor="middle" fill="white" font-size="11" font-family="monospace">Term 3 — Leader: N3</text>
+        <rect x="342" y="10" width="110" height="30" rx="4" fill="#4f46e5" opacity="0.7"/>
+        <text x="397" y="30" text-anchor="middle" fill="white" font-size="11" font-family="monospace">Term 4 — N2</text>
+        <text x="460" y="32" fill="#475569" font-size="10" font-family="monospace">→ time</text>
+      </svg>
     </div>
-    <p class="text-slate-400 text-sm mt-3">
-      Terms act as a logical clock. If a node receives a message with a higher term, it immediately
-      reverts to follower. Stale leaders are neutralized automatically.
-    </p>
   </section>
 
   <!-- Leader election -->
@@ -89,25 +81,42 @@ const base = import.meta.env.BASE_URL;
       <span class="px-2 py-1 bg-emerald-900/40 text-emerald-400 text-xs font-mono rounded">Phase 1</span>
       <h2 class="text-2xl font-bold text-white">Leader Election</h2>
     </div>
-    <div class="space-y-4 mb-8 text-slate-400 leading-relaxed">
-      <p><strong class="text-slate-200">1. Heartbeat timeout.</strong> Every follower has an election timeout (randomized, typically 150–300ms). If it doesn't hear from a leader within that window, it starts an election.</p>
-      <p><strong class="text-slate-200">2. Become candidate.</strong> The follower increments its term, votes for itself, and sends <code class="text-sky-300">RequestVote</code> RPCs to all other nodes.</p>
-      <p><strong class="text-slate-200">3. Vote rules.</strong> A node grants its vote if: (a) it hasn't voted yet in this term, and (b) the candidate's log is at least as up-to-date as its own.</p>
-      <p><strong class="text-slate-200">4. Win majority.</strong> If the candidate receives votes from a majority of nodes (⌊n/2⌋ + 1), it becomes the new leader and starts sending heartbeats.</p>
-      <p><strong class="text-slate-200">5. Randomized timeouts prevent split votes.</strong> If two nodes start an election simultaneously, they likely won't both get a majority. The random timeout makes it rare, and a new term starts quickly if it happens.</p>
+    <div class="space-y-3 mb-8 text-slate-400 leading-relaxed text-sm">
+      <p><strong class="text-slate-200">1. Heartbeat timeout.</strong> Each follower has an election timeout (randomized, 150–300ms). No heartbeat → starts an election.</p>
+      <p><strong class="text-slate-200">2. Become candidate.</strong> Increments its term, votes for itself, sends <code class="text-sky-300 bg-slate-800 px-1 rounded">RequestVote</code> to all peers.</p>
+      <p><strong class="text-slate-200">3. Vote rules.</strong> A node grants its vote if: (a) hasn't voted in this term, and (b) candidate's log is at least as up-to-date.</p>
+      <p><strong class="text-slate-200">4. Win majority.</strong> ⌊n/2⌋ + 1 votes → becomes leader, sends heartbeats immediately.</p>
+      <p><strong class="text-slate-200">5. Randomized timeouts</strong> prevent split votes — two nodes rarely start elections at the exact same millisecond.</p>
     </div>
 
-    <!-- Interactive election demo -->
-    <div class="bg-slate-900 rounded-2xl border border-slate-700 p-6">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="font-semibold text-white">Interactive: Leader Election</h3>
+    <!-- Election SVG demo -->
+    <div class="bg-slate-900 rounded-2xl border border-slate-700 p-6 flex flex-col gap-4" data-cluster-root>
+      <div class="flex items-center justify-between">
+        <h3 class="font-semibold text-white text-sm">Interactive: Leader Election</h3>
         <div class="flex gap-2">
-          <button id="election-run" class="px-3 py-1.5 text-sm bg-emerald-800/60 hover:bg-emerald-700/60 text-emerald-300 rounded-lg border border-emerald-700/40 transition">Run Election</button>
-          <button id="election-reset" class="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition">Reset</button>
+          <button data-cluster="election" data-action="election"
+            class="px-3 py-1.5 text-xs font-mono bg-emerald-900/50 hover:bg-emerald-800/60 text-emerald-300 rounded-lg border border-emerald-700/40 transition">
+            Run Election
+          </button>
+          <button data-cluster="election" data-action="kill"
+            class="px-3 py-1.5 text-xs font-mono bg-red-900/50 hover:bg-red-800/60 text-red-300 rounded-lg border border-red-700/40 transition">
+            Kill Leader
+          </button>
+          <button data-cluster="election" data-action="reset"
+            class="px-3 py-1.5 text-xs font-mono bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition">
+            Reset
+          </button>
         </div>
       </div>
-      <div id="election-nodes" class="flex gap-6 justify-center mb-6"></div>
-      <div id="election-log" class="font-mono text-xs text-slate-400 space-y-1 min-h-[80px] max-h-[120px] overflow-y-auto"></div>
+      <svg id="svg-election" viewBox="0 0 600 280" class="w-full" style="height:280px"
+           data-cluster="election" data-node-count="5">
+        <g id="edges-election"></g>
+        <g id="nodes-election"></g>
+        <g id="packets-election"></g>
+      </svg>
+      <div id="log-election"
+        class="font-mono text-xs text-slate-400 space-y-0.5 min-h-[48px] max-h-[80px] overflow-y-auto leading-5">
+      </div>
     </div>
   </section>
 
@@ -117,27 +126,54 @@ const base = import.meta.env.BASE_URL;
       <span class="px-2 py-1 bg-sky-900/40 text-sky-400 text-xs font-mono rounded">Phase 2</span>
       <h2 class="text-2xl font-bold text-white">Log Replication</h2>
     </div>
-    <div class="space-y-4 mb-8 text-slate-400 leading-relaxed">
-      <p><strong class="text-slate-200">The replicated log.</strong> Each Raft node maintains an ordered log of commands. The goal is to keep all logs identical across all nodes.</p>
-      <p><strong class="text-slate-200">1. Client request.</strong> A client sends a command to the leader (e.g., <code class="text-sky-300">SET x=5</code>). If it reaches a follower, the follower redirects to the leader.</p>
-      <p><strong class="text-slate-200">2. Append entry.</strong> The leader appends the command to its own log as a new entry (with the current term number).</p>
-      <p><strong class="text-slate-200">3. Replicate.</strong> The leader sends <code class="text-sky-300">AppendEntries</code> RPCs to all followers in parallel.</p>
-      <p><strong class="text-slate-200">4. Commit on majority.</strong> Once a majority of nodes have written the entry to their logs, the leader marks it as <em>committed</em> and applies it to its state machine. The leader notifies followers of the commit in the next heartbeat.</p>
-      <p><strong class="text-slate-200">5. Consistency check.</strong> Each <code class="text-sky-300">AppendEntries</code> RPC includes the index and term of the previous log entry. Followers reject entries if there's a mismatch — this ensures logs never diverge.</p>
+    <div class="space-y-3 mb-8 text-slate-400 leading-relaxed text-sm">
+      <p><strong class="text-slate-200">The replicated log.</strong> Each Raft node keeps an ordered log of commands. The goal is identical logs across all nodes.</p>
+      <p><strong class="text-slate-200">1. Client → leader.</strong> Client sends a command (e.g. <code class="text-sky-300 bg-slate-800 px-1 rounded">SET x=5</code>). Followers redirect to the leader.</p>
+      <p><strong class="text-slate-200">2. Append entry.</strong> Leader appends it to its log with the current term number.</p>
+      <p><strong class="text-slate-200">3. AppendEntries RPCs.</strong> Leader sends the new entry to all followers in parallel.</p>
+      <p><strong class="text-slate-200">4. Commit on majority.</strong> Once a majority ACKs, the leader marks it committed and applies it to its state machine.</p>
+      <p><strong class="text-slate-200">5. Consistency check.</strong> Each <code class="text-sky-300 bg-slate-800 px-1 rounded">AppendEntries</code> includes the previous entry's index + term. Mismatches are rejected — logs never diverge.</p>
     </div>
 
-    <!-- Log visualization -->
-    <div class="bg-slate-900 rounded-2xl border border-slate-700 p-6">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="font-semibold text-white">Interactive: Log Replication</h3>
+    <!-- Log replication SVG demo -->
+    <div class="bg-slate-900 rounded-2xl border border-slate-700 p-6 flex flex-col gap-4" data-cluster-root>
+      <div class="flex items-center justify-between">
+        <h3 class="font-semibold text-white text-sm">Interactive: Log Replication</h3>
         <div class="flex gap-2">
-          <button id="log-send" class="px-3 py-1.5 text-sm bg-sky-800/60 hover:bg-sky-700/60 text-sky-300 rounded-lg border border-sky-700/40 transition">Send Command</button>
-          <button id="log-reset" class="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition">Reset</button>
+          <button data-cluster="replication" data-action="election"
+            class="px-3 py-1.5 text-xs font-mono bg-emerald-900/50 hover:bg-emerald-800/60 text-emerald-300 rounded-lg border border-emerald-700/40 transition">
+            Elect Leader
+          </button>
+          <button data-cluster="replication" data-action="send"
+            class="px-3 py-1.5 text-xs font-mono bg-sky-900/50 hover:bg-sky-800/60 text-sky-300 rounded-lg border border-sky-700/40 transition">
+            Send Command
+          </button>
+          <button data-cluster="replication" data-action="reset"
+            class="px-3 py-1.5 text-xs font-mono bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition">
+            Reset
+          </button>
         </div>
       </div>
-      <div id="log-display" class="space-y-3"></div>
-      <div id="log-status" class="mt-4 font-mono text-xs text-slate-400 min-h-[40px]"></div>
+      <svg id="svg-replication" viewBox="0 0 600 280" class="w-full" style="height:280px"
+           data-cluster="replication" data-node-count="5">
+        <g id="edges-replication"></g>
+        <g id="nodes-replication"></g>
+        <g id="packets-replication"></g>
+      </svg>
+      <div id="log-replication-log"
+        class="font-mono text-xs text-slate-400 space-y-0.5 min-h-[48px] max-h-[80px] overflow-y-auto leading-5">
+      </div>
     </div>
+
+    <!-- Note: log div id conflict workaround -->
+    <script>
+      // The section id="log-replication" conflicts with the log div id,
+      // so we renamed the log div to "log-replication-log" and alias it here.
+      document.addEventListener('DOMContentLoaded', () => {
+        const alias = document.getElementById('log-replication-log');
+        if (alias) alias.id = 'log-replication';
+      });
+    </script>
   </section>
 
   <!-- Safety -->
@@ -146,40 +182,31 @@ const base = import.meta.env.BASE_URL;
       <span class="px-2 py-1 bg-red-900/40 text-red-400 text-xs font-mono rounded">Phase 3</span>
       <h2 class="text-2xl font-bold text-white">Safety Guarantees</h2>
     </div>
-    <div class="space-y-4 mb-6">
-      <div class="bg-slate-900 rounded-xl border border-slate-700 p-5">
-        <h4 class="font-semibold text-white mb-2">Election Safety</h4>
-        <p class="text-slate-400 text-sm">At most one leader per term. Proven by majority — two majorities always overlap by at least one node, which can only vote once per term.</p>
-      </div>
-      <div class="bg-slate-900 rounded-xl border border-slate-700 p-5">
-        <h4 class="font-semibold text-white mb-2">Leader Append-Only</h4>
-        <p class="text-slate-400 text-sm">A leader never overwrites or deletes its log. It only appends. This means committed entries are permanent from the leader's perspective.</p>
-      </div>
-      <div class="bg-slate-900 rounded-xl border border-slate-700 p-5">
-        <h4 class="font-semibold text-white mb-2">Log Matching</h4>
-        <p class="text-slate-400 text-sm">If two logs have an entry with the same index and term, all preceding entries are identical. The consistency check in AppendEntries enforces this inductively.</p>
-      </div>
-      <div class="bg-slate-900 rounded-xl border border-slate-700 p-5">
-        <h4 class="font-semibold text-white mb-2">Leader Completeness</h4>
-        <p class="text-slate-400 text-sm">A leader always has all committed entries from previous terms. The vote rule (candidates need an up-to-date log) ensures a node that hasn't seen committed entries can never win.</p>
-      </div>
-      <div class="bg-slate-900 rounded-xl border border-slate-700 p-5">
-        <h4 class="font-semibold text-white mb-2">State Machine Safety</h4>
-        <p class="text-slate-400 text-sm">If a node applies a log entry at index i, no other node will ever apply a different entry at index i. This is the top-level correctness guarantee.</p>
-      </div>
+    <div class="space-y-3 mb-6">
+      {[
+        ['Election Safety', 'At most one leader per term. Two majorities always share at least one node, which can only vote once per term.'],
+        ['Leader Append-Only', 'A leader never overwrites its log — only appends. Committed entries are permanent.'],
+        ['Log Matching', 'If two logs share an entry at the same index + term, all preceding entries are identical. Enforced inductively by the consistency check.'],
+        ['Leader Completeness', 'A leader always has all committed entries. The vote rule (log up-to-date check) ensures nodes that missed committed entries can never win.'],
+        ['State Machine Safety', 'No two nodes ever apply different commands at the same log index. This is the top-level correctness guarantee.'],
+      ].map(([title, desc]) => (
+        <div class="bg-slate-900 rounded-xl border border-slate-700 p-5">
+          <h4 class="font-semibold text-white mb-1">{title}</h4>
+          <p class="text-slate-400 text-sm">{desc}</p>
+        </div>
+      ))}
     </div>
 
     <div class="bg-amber-900/20 border border-amber-700/40 rounded-xl p-5">
       <h4 class="font-semibold text-amber-400 mb-2">What Raft does NOT guarantee</h4>
       <ul class="text-slate-400 text-sm space-y-1 list-disc list-inside">
-        <li>It won't make progress if the cluster loses quorum (majority of nodes unreachable) — this is by design (CP, not AP)</li>
-        <li>It doesn't protect against Byzantine faults (nodes lying, corrupting data, behaving maliciously) — it only handles crashes and network issues</li>
-        <li>It doesn't guarantee low latency — a write requires 2 round-trips minimum (leader → followers → ack → commit)</li>
+        <li>No progress if majority of nodes are unreachable (CP, not AP — by design)</li>
+        <li>No protection against Byzantine faults (lying/corrupting nodes)</li>
+        <li>No low latency guarantee — a write needs at least 2 round-trips</li>
       </ul>
     </div>
   </section>
 
-  <!-- Next -->
   <section class="max-w-4xl mx-auto px-4 py-12">
     <div class="flex justify-between items-center">
       <a href={`${base}/problem`} class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition text-sm">← The Problem</a>
@@ -189,173 +216,6 @@ const base = import.meta.env.BASE_URL;
 </Base>
 
 <script>
-  // --- Leader Election Demo ---
-  const COLORS: Record<string, string> = {
-    follower: '#6366f1', candidate: '#10b981', leader: '#f59e0b', dead: '#374151',
-  };
-
-  interface Node { id: number; state: 'follower'|'candidate'|'leader'; term: number; }
-  let eNodes: Node[] = [];
-  let eAnimating = false;
-
-  function renderElection() {
-    const c = document.getElementById('election-nodes');
-    if (!c) return;
-    c.innerHTML = '';
-    eNodes.forEach(n => {
-      const color = COLORS[n.state];
-      const d = document.createElement('div');
-      d.className = 'flex flex-col items-center gap-1';
-      d.innerHTML = `
-        <div style="width:52px;height:52px;border-radius:50%;border:2px solid ${color};background:${color}22;
-                    display:flex;align-items:center;justify-content:center;font-family:monospace;
-                    font-size:11px;font-weight:bold;color:${color};transition:all 0.3s">N${n.id}</div>
-        <span style="font-size:10px;color:#64748b;font-family:monospace;">${n.state}</span>
-        <span style="font-size:10px;color:#475569;font-family:monospace;">t${n.term}</span>
-      `;
-      c.appendChild(d);
-    });
-  }
-
-  function eLog(msg: string) {
-    const el = document.getElementById('election-log');
-    if (!el) return;
-    const line = document.createElement('div');
-    line.textContent = '> ' + msg;
-    el.appendChild(line);
-    el.scrollTop = el.scrollHeight;
-  }
-
-  function eInit() {
-    eNodes = Array.from({length:5},(_,i)=>({id:i+1,state:'follower' as const,term:1}));
-    eAnimating = false;
-    renderElection();
-    const el = document.getElementById('election-log');
-    if (el) el.innerHTML = '<div style="color:#475569"># 5-node cluster, all followers, term 1</div>';
-  }
-
-  const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-
-  async function runElection() {
-    if (eAnimating) return;
-    eAnimating = true;
-    const alive = eNodes.filter(n => n.state !== 'dead' as any);
-    const cand = alive[Math.floor(Math.random() * alive.length)];
-    eNodes.forEach(n => { if (n.state === 'leader') n.state = 'follower'; });
-    cand.state = 'candidate';
-    cand.term++;
-    renderElection();
-    eLog(`N${cand.id} timed out → candidate (term ${cand.term}), requesting votes...`);
-    await sleep(600);
-    let votes = 1;
-    for (const n of alive) {
-      if (n.id === cand.id) continue;
-      await sleep(400);
-      votes++;
-      eLog(`N${n.id} → vote granted to N${cand.id}  [${votes}/${alive.length}]`);
-      renderElection();
-    }
-    await sleep(400);
-    if (votes > alive.length / 2) {
-      cand.state = 'leader';
-      alive.filter(n=>n.id!==cand.id).forEach(n=>n.state='follower');
-      renderElection();
-      eLog(`✓ N${cand.id} wins election → leader (term ${cand.term}), sending heartbeats`);
-    }
-    eAnimating = false;
-  }
-
-  document.getElementById('election-run')?.addEventListener('click', runElection);
-  document.getElementById('election-reset')?.addEventListener('click', eInit);
-  eInit();
-
-  // --- Log Replication Demo ---
-  const COMMANDS = ['SET x=1','SET y=42','DEL z','SET counter=0','INCR counter','SET name=raft'];
-  let cmdIdx = 0;
-
-  interface LogEntry { idx: number; term: number; cmd: string; committed: boolean; }
-  interface LogNode { id: number; role: string; log: LogEntry[]; }
-  let logNodes: LogNode[] = [];
-  let lAnimating = false;
-
-  function renderLog() {
-    const c = document.getElementById('log-display');
-    if (!c) return;
-    c.innerHTML = '';
-    logNodes.forEach(n => {
-      const row = document.createElement('div');
-      row.className = 'flex items-center gap-2';
-      const roleColor = n.role === 'leader' ? '#f59e0b' : '#6366f1';
-      row.innerHTML = `<span style="font-family:monospace;font-size:11px;color:${roleColor};width:90px;flex-shrink:0;">${n.role === 'leader' ? '★' : '○'} ${n.id}</span>`;
-      const entries = document.createElement('div');
-      entries.className = 'flex gap-1';
-      n.log.forEach(e => {
-        const cell = document.createElement('div');
-        cell.style.cssText = `padding:3px 8px;border-radius:4px;font-size:10px;font-family:monospace;
-          background:${e.committed ? '#1e3a5f' : '#1c2a1c'};
-          border:1px solid ${e.committed ? '#2563eb' : '#16a34a'};
-          color:${e.committed ? '#93c5fd' : '#86efac'}`;
-        cell.textContent = `${e.idx}: ${e.cmd}`;
-        entries.appendChild(cell);
-      });
-      row.appendChild(entries);
-      c.appendChild(row);
-    });
-  }
-
-  function setLogStatus(msg: string) {
-    const el = document.getElementById('log-status');
-    if (el) el.textContent = msg;
-  }
-
-  function lInit() {
-    logNodes = [
-      {id:'N1 (leader)',role:'leader'} as any,
-      {id:'N2',role:'follower'} as any,
-      {id:'N3',role:'follower'} as any,
-      {id:'N4',role:'follower'} as any,
-      {id:'N5',role:'follower'} as any,
-    ].map((n,i)=>({id:n.id,role:n.role,log:[]}));
-    cmdIdx = 0;
-    lAnimating = false;
-    renderLog();
-    setLogStatus('# Click "Send Command" to replicate an entry to the cluster');
-  }
-
-  async function sendCommand() {
-    if (lAnimating) return;
-    lAnimating = true;
-    const cmd = COMMANDS[cmdIdx % COMMANDS.length];
-    cmdIdx++;
-    const idx = (logNodes[0].log.length) + 1;
-    const entry: LogEntry = {idx, term:1, cmd, committed:false};
-
-    // append to leader
-    logNodes[0].log.push({...entry});
-    renderLog();
-    setLogStatus(`[1/3] Leader appended entry ${idx}: "${cmd}" — replicating...`);
-    await sleep(600);
-
-    // replicate to followers
-    for (let i = 1; i < logNodes.length; i++) {
-      await sleep(250);
-      logNodes[i].log.push({...entry});
-      renderLog();
-    }
-    setLogStatus(`[2/3] Majority replicated — committing...`);
-    await sleep(500);
-
-    // commit
-    logNodes.forEach(n => {
-      const e = n.log.find(e => e.idx === idx);
-      if (e) e.committed = true;
-    });
-    renderLog();
-    setLogStatus(`[3/3] ✓ Entry ${idx} committed — "${cmd}" applied to all state machines`);
-    lAnimating = false;
-  }
-
-  document.getElementById('log-send')?.addEventListener('click', sendCommand);
-  document.getElementById('log-reset')?.addEventListener('click', lInit);
-  lInit();
+  import { initClusters } from '../scripts/raft-cluster';
+  initClusters();
 </script>

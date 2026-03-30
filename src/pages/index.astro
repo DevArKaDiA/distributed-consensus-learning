@@ -3,6 +3,7 @@ import Base from '../layouts/Base.astro';
 const base = import.meta.env.BASE_URL;
 ---
 <Base title="Home">
+
   <!-- Hero -->
   <section class="max-w-6xl mx-auto px-4 pt-24 pb-16 text-center">
     <span class="inline-block px-3 py-1 rounded-full bg-sky-900/40 text-sky-400 text-xs font-mono mb-6 border border-sky-800">
@@ -26,23 +27,60 @@ const base = import.meta.env.BASE_URL;
     </div>
   </section>
 
-  <!-- Mini cluster animation -->
-  <section class="max-w-2xl mx-auto px-4 py-8">
-    <div id="cluster-demo" class="bg-slate-900 rounded-2xl border border-slate-700 p-8 flex flex-col items-center gap-6">
-      <p class="text-slate-500 text-sm font-mono">live demo — 5-node cluster</p>
-      <div id="nodes-container" class="flex gap-8 items-center justify-center"></div>
-      <div id="demo-status" class="text-sm text-slate-400 font-mono h-6"></div>
-      <div class="flex gap-3">
-        <button id="btn-start" class="px-4 py-2 text-sm bg-green-800/60 hover:bg-green-700/60 text-green-300 rounded-lg border border-green-700/40 transition">
-          Start Election
-        </button>
-        <button id="btn-kill" class="px-4 py-2 text-sm bg-red-800/60 hover:bg-red-700/60 text-red-300 rounded-lg border border-red-700/40 transition">
-          Kill Leader
-        </button>
-        <button id="btn-reset" class="px-4 py-2 text-sm bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg border border-slate-600 transition">
-          Reset
-        </button>
+  <!-- Cluster demo -->
+  <section class="max-w-2xl mx-auto px-4 py-4" data-cluster-root>
+    <div class="bg-slate-900 rounded-2xl border border-slate-700 p-6 flex flex-col gap-4">
+      <div class="flex items-center justify-between">
+        <p class="text-slate-500 text-xs font-mono">live demo — 5-node Raft cluster</p>
+        <div class="flex gap-2">
+          <button data-cluster="home" data-action="election"
+            class="px-3 py-1.5 text-xs font-mono bg-emerald-900/50 hover:bg-emerald-800/60 text-emerald-300 rounded-lg border border-emerald-700/40 transition">
+            Start Election
+          </button>
+          <button data-cluster="home" data-action="kill"
+            class="px-3 py-1.5 text-xs font-mono bg-red-900/50 hover:bg-red-800/60 text-red-300 rounded-lg border border-red-700/40 transition">
+            Kill Leader
+          </button>
+          <button data-cluster="home" data-action="reset"
+            class="px-3 py-1.5 text-xs font-mono bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition">
+            Reset
+          </button>
+        </div>
       </div>
+
+      <svg id="svg-home" viewBox="0 0 600 300" class="w-full" style="height:300px"
+           data-cluster="home" data-node-count="5">
+        <defs>
+          <marker id="arrow-home" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#475569" />
+          </marker>
+        </defs>
+        <g id="edges-home"></g>
+        <g id="nodes-home"></g>
+        <g id="packets-home"></g>
+      </svg>
+
+      <div id="log-home"
+        class="font-mono text-xs text-slate-400 space-y-0.5 min-h-[48px] max-h-[72px] overflow-y-auto leading-5">
+      </div>
+    </div>
+  </section>
+
+  <!-- Legend -->
+  <section class="max-w-2xl mx-auto px-4 py-3">
+    <div class="flex gap-6 justify-center text-xs font-mono text-slate-500">
+      <span class="flex items-center gap-1.5">
+        <span class="w-3 h-3 rounded-full inline-block" style="background:#6366f1"></span>follower
+      </span>
+      <span class="flex items-center gap-1.5">
+        <span class="w-3 h-3 rounded-full inline-block" style="background:#10b981"></span>candidate
+      </span>
+      <span class="flex items-center gap-1.5">
+        <span class="w-3 h-3 rounded-full inline-block" style="background:#f59e0b"></span>leader
+      </span>
+      <span class="flex items-center gap-1.5">
+        <span class="w-3 h-3 rounded-full inline-block" style="background:#374151"></span>dead
+      </span>
     </div>
   </section>
 
@@ -58,7 +96,7 @@ const base = import.meta.env.BASE_URL;
       <a href={`${base}/raft`} class="group bg-slate-900 hover:bg-slate-800 rounded-xl border border-slate-700 hover:border-slate-600 p-6 transition">
         <div class="text-2xl mb-3">🗳️</div>
         <h3 class="font-semibold text-white mb-2 group-hover:text-sky-400 transition">How Raft Works</h3>
-        <p class="text-slate-400 text-sm leading-relaxed">Leader election, log replication, and safety — with interactive animations for each phase.</p>
+        <p class="text-slate-400 text-sm leading-relaxed">Leader election, log replication, and safety — with interactive SVG animations for each phase.</p>
       </a>
       <a href={`${base}/in-the-wild`} class="group bg-slate-900 hover:bg-slate-800 rounded-xl border border-slate-700 hover:border-slate-600 p-6 transition">
         <div class="text-2xl mb-3">🌍</div>
@@ -68,12 +106,12 @@ const base = import.meta.env.BASE_URL;
       <a href={`${base}/code`} class="group bg-slate-900 hover:bg-slate-800 rounded-xl border border-slate-700 hover:border-slate-600 p-6 transition">
         <div class="text-2xl mb-3">💻</div>
         <h3 class="font-semibold text-white mb-2 group-hover:text-sky-400 transition">Code</h3>
-        <p class="text-slate-400 text-sm leading-relaxed">Minimal Raft implementations in Python, TypeScript, Go, and Rust — readable and annotated.</p>
+        <p class="text-slate-400 text-sm leading-relaxed">Minimal implementations in Python, TypeScript, Go, and Rust — readable and annotated.</p>
       </a>
       <a href={`${base}/raft#safety`} class="group bg-slate-900 hover:bg-slate-800 rounded-xl border border-slate-700 hover:border-slate-600 p-6 transition">
         <div class="text-2xl mb-3">📐</div>
         <h3 class="font-semibold text-white mb-2 group-hover:text-sky-400 transition">Guarantees</h3>
-        <p class="text-slate-400 text-sm leading-relaxed">What Raft actually guarantees (and what it does not). CAP theorem, linearizability, liveness.</p>
+        <p class="text-slate-400 text-sm leading-relaxed">What Raft actually guarantees and what it doesn't. CAP, linearizability, liveness.</p>
       </a>
       <a href={`${base}/resources`} class="group bg-slate-900 hover:bg-slate-800 rounded-xl border border-slate-700 hover:border-slate-600 p-6 transition">
         <div class="text-2xl mb-3">📚</div>
@@ -83,7 +121,6 @@ const base = import.meta.env.BASE_URL;
     </div>
   </section>
 
-  <!-- Quick context: Paxos vs Raft -->
   <section class="max-w-3xl mx-auto px-4 py-8 mb-8">
     <div class="bg-slate-900 rounded-xl border border-slate-700 p-6">
       <h3 class="font-semibold text-white mb-3">Why Raft, not Paxos?</h3>
@@ -97,103 +134,6 @@ const base = import.meta.env.BASE_URL;
 </Base>
 
 <script>
-  const COLORS: Record<string, string> = {
-    follower: '#6366f1',
-    candidate: '#10b981',
-    leader: '#f59e0b',
-    dead: '#374151',
-  };
-
-  interface NodeData {
-    id: number;
-    state: 'follower' | 'candidate' | 'leader' | 'dead';
-    term: number;
-  }
-
-  let nodes: NodeData[] = [];
-  let animating = false;
-
-  function render() {
-    const container = document.getElementById('nodes-container');
-    if (!container) return;
-    container.innerHTML = '';
-    nodes.forEach(n => {
-      const color = COLORS[n.state];
-      const wrap = document.createElement('div');
-      wrap.className = 'flex flex-col items-center gap-2';
-      wrap.innerHTML = `
-        <div style="width:56px;height:56px;border-radius:50%;border:2px solid ${color};background:${color}22;
-                    display:flex;align-items:center;justify-content:center;
-                    font-family:monospace;font-size:12px;font-weight:bold;color:${color};
-                    transition:all 0.3s ease;">
-          N${n.id}
-        </div>
-        <span style="font-size:11px;color:#94a3b8;font-family:monospace;">${n.state}</span>
-      `;
-      container.appendChild(wrap);
-    });
-  }
-
-  function setStatus(msg: string) {
-    const el = document.getElementById('demo-status');
-    if (el) el.textContent = msg;
-  }
-
-  function init() {
-    nodes = Array.from({ length: 5 }, (_, i) => ({
-      id: i + 1,
-      state: 'follower' as const,
-      term: 0,
-    }));
-    animating = false;
-    render();
-    setStatus('All nodes are followers. Press Start Election.');
-  }
-
-  const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-
-  async function runElection() {
-    if (animating) return;
-    animating = true;
-
-    const alive = nodes.filter(n => n.state !== 'dead');
-    if (alive.length === 0) { animating = false; return; }
-
-    const candidate = alive[Math.floor(Math.random() * alive.length)];
-    nodes.forEach(n => { if (n.state === 'leader') n.state = 'follower'; });
-    candidate.state = 'candidate';
-    candidate.term += 1;
-    render();
-    setStatus(`Node ${candidate.id} timed out → became candidate (term ${candidate.term})`);
-    await sleep(900);
-
-    let votes = 1;
-    for (const n of alive) {
-      if (n.id === candidate.id) continue;
-      await sleep(350);
-      votes++;
-      setStatus(`Node ${n.id} → voted for N${candidate.id}  [${votes}/${alive.length} votes]`);
-    }
-    await sleep(500);
-
-    candidate.state = 'leader';
-    alive.filter(n => n.id !== candidate.id).forEach(n => n.state = 'follower');
-    render();
-    setStatus(`✓ Node ${candidate.id} is leader (term ${candidate.term}) — heartbeats sent to followers`);
-    animating = false;
-  }
-
-  function killLeader() {
-    const leader = nodes.find(n => n.state === 'leader');
-    if (!leader) { setStatus('No leader yet. Run an election first.'); return; }
-    leader.state = 'dead';
-    render();
-    setStatus(`Node ${leader.id} crashed 💀 — followers will timeout and start a new election`);
-  }
-
-  document.getElementById('btn-start')?.addEventListener('click', runElection);
-  document.getElementById('btn-kill')?.addEventListener('click', killLeader);
-  document.getElementById('btn-reset')?.addEventListener('click', init);
-
-  init();
+  import { initClusters } from '../scripts/raft-cluster';
+  initClusters();
 </script>

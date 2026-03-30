@@ -1,0 +1,74 @@
+---
+// Reusable SVG Raft cluster visualization
+// Props control which buttons are shown and initial state
+export interface Props {
+  id: string;           // unique id prefix for DOM elements
+  nodeCount?: number;   // default 5
+  showKill?: boolean;
+  showSendCmd?: boolean;
+  height?: number;
+}
+const {
+  id,
+  nodeCount = 5,
+  showKill = false,
+  showSendCmd = false,
+  height = 320,
+} = Astro.props;
+---
+
+<div class="bg-slate-900 rounded-2xl border border-slate-700 p-6 flex flex-col gap-4">
+  <div class="flex items-center justify-between">
+    <slot name="title" />
+    <div class="flex gap-2">
+      <button data-cluster={id} data-action="election"
+        class="px-3 py-1.5 text-xs font-mono bg-emerald-900/50 hover:bg-emerald-800/60 text-emerald-300 rounded-lg border border-emerald-700/40 transition">
+        Start Election
+      </button>
+      {showKill && (
+        <button data-cluster={id} data-action="kill"
+          class="px-3 py-1.5 text-xs font-mono bg-red-900/50 hover:bg-red-800/60 text-red-300 rounded-lg border border-red-700/40 transition">
+          Kill Leader
+        </button>
+      )}
+      {showSendCmd && (
+        <button data-cluster={id} data-action="send"
+          class="px-3 py-1.5 text-xs font-mono bg-sky-900/50 hover:bg-sky-800/60 text-sky-300 rounded-lg border border-sky-700/40 transition">
+          Send Command
+        </button>
+      )}
+      <button data-cluster={id} data-action="reset"
+        class="px-3 py-1.5 text-xs font-mono bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition">
+        Reset
+      </button>
+    </div>
+  </div>
+
+  <svg
+    id={`svg-${id}`}
+    viewBox={`0 0 600 ${height}`}
+    class="w-full"
+    style={`height: ${height}px`}
+    data-cluster={id}
+    data-node-count={nodeCount}
+  >
+    <defs>
+      <marker id={`arrow-${id}`} markerWidth="8" markerHeight="8"
+        refX="6" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 z" fill="#475569" />
+      </marker>
+      <marker id={`arrow-active-${id}`} markerWidth="8" markerHeight="8"
+        refX="6" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 z" fill="#38bdf8" />
+      </marker>
+    </defs>
+    <!-- edges and nodes rendered by JS -->
+    <g id={`edges-${id}`}></g>
+    <g id={`nodes-${id}`}></g>
+    <g id={`packets-${id}`}></g>
+  </svg>
+
+  <div id={`log-${id}`}
+    class="font-mono text-xs text-slate-400 space-y-0.5 min-h-[48px] max-h-[80px] overflow-y-auto leading-5">
+  </div>
+</div>
