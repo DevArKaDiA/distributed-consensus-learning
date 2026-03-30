@@ -5,7 +5,7 @@ export const es: Translations = {
     problem: 'El Problema',
     raft: 'Raft',
     wild: 'En Producción',
-    code: 'Código',
+    implementation: 'Implementación',
     resources: 'Recursos',
     visualizer: 'Visualizador',
   },

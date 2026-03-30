@@ -4,7 +4,7 @@ export const en = {
     problem: 'The Problem',
     raft: 'Raft',
     wild: 'In the Wild',
-    code: 'Code',
+    implementation: 'Implementation',
     resources: 'Resources',
     visualizer: 'Visualizer',
   },

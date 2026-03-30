@@ -139,8 +139,11 @@ const tv = t.visualizer;
     </div>
   </section>
 
-  <!-- Terminal KV distribuido -->
+  <!-- Terminales: KV + Admin -->
   <section class="max-w-6xl mx-auto px-4 pb-12">
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+
+  <!-- Terminal KV distribuido -->
     <div class="bg-black border border-slate-700 rounded-xl overflow-hidden font-mono" id="kv-terminal">
       <!-- Cabecera del terminal -->
       <div class="flex items-center gap-2 px-4 py-2.5 bg-slate-900 border-b border-slate-700">
@@ -160,6 +163,29 @@ const tv = t.visualizer;
           placeholder="set clave valor  |  get clave  |  del clave  |  keys  |  state  |  help" />
       </div>
     </div>
+
+  <!-- Shell de administración del clúster -->
+    <div class="bg-black border border-red-900/50 rounded-xl overflow-hidden font-mono" id="admin-terminal">
+      <!-- Cabecera del terminal -->
+      <div class="flex items-center gap-2 px-4 py-2.5 bg-slate-900 border-b border-red-900/40">
+        <span class="w-3 h-3 rounded-full bg-red-500 opacity-80"></span>
+        <span class="w-3 h-3 rounded-full bg-amber-500 opacity-80"></span>
+        <span class="w-3 h-3 rounded-full bg-green-500 opacity-50"></span>
+        <span class="text-red-400/80 text-xs ml-3">admin-clúster — usar con precaución</span>
+        <span class="ml-auto text-slate-600 text-xs">escribe <span class="text-slate-400">help</span> para comandos</span>
+      </div>
+      <!-- Área de salida -->
+      <div id="admin-output" class="h-56 overflow-y-auto px-4 py-3 space-y-0.5 text-sm leading-5" style="scrollbar-color:#334155 #000"></div>
+      <!-- Línea de entrada -->
+      <div class="flex items-center gap-2 px-4 py-2.5 border-t border-red-900/30">
+        <span class="text-red-400 select-none font-bold">#</span>
+        <input id="admin-input" type="text" autocomplete="off" spellcheck="false"
+          class="flex-1 bg-transparent text-amber-200 text-sm outline-none placeholder-slate-600 caret-red-400"
+          placeholder="kill N3  |  revive N3  |  partition N1,N2  |  heal  |  status" />
+      </div>
+    </div>
+
+    </div><!-- fin grid terminales -->
   </section>
 
 </Base>
@@ -227,6 +253,9 @@ const tv = t.visualizer;
   let playTimer: ReturnType<typeof setTimeout> | null = null;
   let speedMultiplier = 1;
   let selectedNode: number | null = null;
+
+  // Admin shell: nodos aislados (partición)
+  const isolatedNodes = new Set<number>();
 
   // ─── DOM refs ─────────────────────────────────────────────────────────────────
 
@@ -358,6 +387,33 @@ const tv = t.visualizer;
         });
       }
     });
+
+    // Anillos de partición para nodos aislados
+    for (const node of state.nodes) {
+      const oldRing = document.getElementById(`vpartition-${node.id}`);
+      if (oldRing) oldRing.remove();
+      if (isolatedNodes.has(node.id)) {
+        const pos = positions[node.id - 1];
+        if (!pos) continue;
+        const ring = svgEl2('circle', {
+          cx: pos.x, cy: pos.y,
+          r: NODE_R + 18,
+          fill: 'none',
+          stroke: '#ef4444',
+          'stroke-width': 2,
+          'stroke-dasharray': '6 4',
+          opacity: 0.8,
+          id: `vpartition-${node.id}`,
+          style: 'pointer-events:none',
+        });
+        nodesG.appendChild(ring);
+        const dimCircle = document.getElementById(`vcircle-${node.id}`);
+        if (dimCircle) dimCircle.setAttribute('opacity', '0.35');
+      } else {
+        const dimCircle = document.getElementById(`vcircle-${node.id}`);
+        if (dimCircle) dimCircle.setAttribute('opacity', '1');
+      }
+    }
   }
 
   function animatePacket(fromId: number, toId: number, color: string, state: ReturnType<typeof generateScenario>[number]['state']) {
@@ -387,6 +443,20 @@ const tv = t.visualizer;
     waapi.animate(circle, {
       scale: [1, 1.2, 1],
       duration: 350,
+      ease: 'out(3)',
+    });
+  }
+
+  function flashNodeColor(nodeId: number, color: string) {
+    const circle = document.getElementById(`vcircle-${nodeId}`);
+    if (!circle) return;
+    const origStroke = circle.getAttribute('stroke') ?? '#6366f1';
+    const origFill = circle.getAttribute('fill') ?? '#6366f118';
+    waapi.animate(circle, {
+      stroke: [color, origStroke],
+      fill: [color + '44', origFill],
+      scale: [1, 1.3, 1],
+      duration: 500,
       ease: 'out(3)',
     });
   }
@@ -762,6 +832,7 @@ const tv = t.visualizer;
 
   kvPrint('  kv-distribuido v1.0  —  almacén clave/valor respaldado por Raft', 'text-slate-500');
   kvPrint('  escribe help para ver los comandos disponibles', 'text-slate-500');
+  kvPrint('  usa la shell de admin-clúster de abajo para matar/revivir nodos o crear particiones', 'text-slate-600');
 
   kvTerminal.addEventListener('click', () => kvInput.focus());
 
@@ -770,5 +841,208 @@ const tv = t.visualizer;
     const val = kvInput.value;
     kvInput.value = '';
     await kvHandleCommand(val);
+  });
+
+  // ─── Shell de administración del clúster ─────────────────────────────────────
+
+  const adminOutput = document.getElementById('admin-output')!;
+  const adminInput  = document.getElementById('admin-input') as HTMLInputElement;
+  const adminTerminal = document.getElementById('admin-terminal')!;
+  const ADMIN_MAX_SCROLLBACK = 80;
+
+  function adminPrint(line: string, cls = 'text-amber-100/80') {
+    const div = document.createElement('div');
+    div.className = `font-mono text-sm whitespace-pre ${cls}`;
+    div.textContent = line;
+    adminOutput.appendChild(div);
+    while (adminOutput.children.length > ADMIN_MAX_SCROLLBACK) {
+      adminOutput.removeChild(adminOutput.firstChild!);
+    }
+    adminOutput.scrollTop = adminOutput.scrollHeight;
+  }
+
+  function adminGetState() {
+    if (cursor < 0 || cursor >= events.length) return null;
+    return events[cursor].state;
+  }
+
+  function adminParseNodeId(raw: string): number | null {
+    const m = raw.trim().toUpperCase().match(/^N?(\d+)$/);
+    if (!m) return null;
+    return parseInt(m[1], 10);
+  }
+
+  async function adminHandleCommand(raw: string) {
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+
+    adminPrint(`# ${trimmed}`, 'text-red-300');
+
+    const parts = trimmed.split(/[\s,]+/).filter(Boolean);
+    const cmd = parts[0].toLowerCase();
+
+    if (cmd === 'clear') {
+      adminOutput.innerHTML = '';
+      return;
+    }
+
+    if (cmd === 'help') {
+      adminPrint('  Comandos:', 'text-slate-400');
+      adminPrint('    kill <nodoId>          — crashear un nodo (p.ej. kill N3)', 'text-slate-400');
+      adminPrint('    revive <nodoId>        — revivir un nodo muerto como seguidor', 'text-slate-400');
+      adminPrint('    partition <ids>        — aislar nodos (p.ej. partition N1,N2)', 'text-slate-400');
+      adminPrint('    heal                   — eliminar todas las particiones', 'text-slate-400');
+      adminPrint('    quorum                 — estado del quórum', 'text-slate-400');
+      adminPrint('    leader                 — líder actual y término', 'text-slate-400');
+      adminPrint('    term                   — término actual del clúster', 'text-slate-400');
+      adminPrint('    logs                   — longitudes de log de todos los nodos', 'text-slate-400');
+      adminPrint('    status                 — resumen completo del clúster', 'text-slate-400');
+      adminPrint('    clear                  — limpiar terminal', 'text-slate-400');
+      adminPrint('    help                   — este mensaje', 'text-slate-400');
+      return;
+    }
+
+    if (cmd === 'kill') {
+      const id = adminParseNodeId(parts[1] ?? '');
+      if (!id) { adminPrint('  uso: kill <nodoId>  (p.ej. kill N3)', 'text-amber-400'); return; }
+      const state = adminGetState();
+      if (!state) { adminPrint('  simulación no iniciada', 'text-slate-500'); return; }
+      const node = state.nodes.find(n => n.id === id);
+      if (!node) { adminPrint(`  N${id} no encontrado`, 'text-red-400'); return; }
+      if (node.state === 'dead') { adminPrint(`  N${id} ya está muerto`, 'text-amber-400'); return; }
+      const wasLeader = node.state === 'leader';
+      flashNodeColor(id, '#ef4444');
+      await new Promise(r => setTimeout(r, 300));
+      node.state = 'dead';
+      renderCluster(state);
+      adminPrint(`  N${id} eliminado`, 'text-red-400');
+      if (wasLeader) adminPrint('  ⚠ el líder ha caído — se necesitará una nueva elección', 'text-amber-300');
+      return;
+    }
+
+    if (cmd === 'revive') {
+      const id = adminParseNodeId(parts[1] ?? '');
+      if (!id) { adminPrint('  uso: revive <nodoId>  (p.ej. revive N3)', 'text-amber-400'); return; }
+      const state = adminGetState();
+      if (!state) { adminPrint('  simulación no iniciada', 'text-slate-500'); return; }
+      const node = state.nodes.find(n => n.id === id);
+      if (!node) { adminPrint(`  N${id} no encontrado`, 'text-red-400'); return; }
+      if (node.state !== 'dead') { adminPrint(`  N${id} no está muerto (estado: ${node.state})`, 'text-amber-400'); return; }
+      node.state = 'follower';
+      renderCluster(state);
+      flashNodeColor(id, '#22c55e');
+      adminPrint(`  N${id} revivido como seguidor (término ${node.term})`, 'text-green-400');
+      return;
+    }
+
+    if (cmd === 'partition') {
+      const ids = parts.slice(1).map(p => adminParseNodeId(p)).filter(Boolean) as number[];
+      if (ids.length === 0) { adminPrint('  uso: partition N1,N2  (separados por coma o espacio)', 'text-amber-400'); return; }
+      const state = adminGetState();
+      if (!state) { adminPrint('  simulación no iniciada', 'text-slate-500'); return; }
+      for (const id of ids) {
+        if (!state.nodes.find(n => n.id === id)) {
+          adminPrint(`  N${id} no encontrado — omitido`, 'text-amber-400');
+          continue;
+        }
+        isolatedNodes.add(id);
+        adminPrint(`  N${id} aislado — los paquetes hacia/desde este nodo serán descartados`, 'text-red-400');
+      }
+      renderCluster(state);
+      return;
+    }
+
+    if (cmd === 'heal') {
+      const state = adminGetState();
+      if (isolatedNodes.size === 0) { adminPrint('  no hay particiones activas', 'text-slate-500'); return; }
+      const healed = [...isolatedNodes].map(id => `N${id}`).join(', ');
+      isolatedNodes.clear();
+      if (state) renderCluster(state);
+      adminPrint(`  partición curada — restaurados: ${healed}`, 'text-green-400');
+      return;
+    }
+
+    if (cmd === 'quorum') {
+      const state = adminGetState();
+      if (!state) { adminPrint('  simulación no iniciada', 'text-slate-500'); return; }
+      const total = state.nodes.length;
+      const alive = state.nodes.filter(n => n.state !== 'dead').length;
+      const majority = Math.floor(total / 2) + 1;
+      const hasQuorum = alive >= majority;
+      adminPrint(`  nodos totales : ${total}`, 'text-slate-300');
+      adminPrint(`  vivos         : ${alive}`, 'text-slate-300');
+      adminPrint(`  mayoría       : ${majority}`, 'text-slate-300');
+      adminPrint(`  quórum        : ${hasQuorum ? 'SÍ' : 'NO'}`, hasQuorum ? 'text-green-400' : 'text-red-400');
+      return;
+    }
+
+    if (cmd === 'leader') {
+      const state = adminGetState();
+      if (!state) { adminPrint('  simulación no iniciada', 'text-slate-500'); return; }
+      const leader = state.nodes.find(n => n.state === 'leader');
+      if (!leader) { adminPrint('  sin líder — clúster en elección o todos muertos', 'text-red-400'); return; }
+      adminPrint(`  líder: N${leader.id}  (término ${leader.term})`, 'text-amber-300');
+      return;
+    }
+
+    if (cmd === 'term') {
+      const state = adminGetState();
+      if (!state) { adminPrint('  simulación no iniciada', 'text-slate-500'); return; }
+      adminPrint(`  término del clúster: ${state.term}`, 'text-slate-300');
+      return;
+    }
+
+    if (cmd === 'logs') {
+      const state = adminGetState();
+      if (!state) { adminPrint('  simulación no iniciada', 'text-slate-500'); return; }
+      adminPrint('  nodo   log   índiceConfirm  estado', 'text-slate-500');
+      adminPrint('  ───────────────────────────────────', 'text-slate-700');
+      for (const n of state.nodes) {
+        const row = `  N${String(n.id).padEnd(4)} ${String(n.log.length).padEnd(5)}  ${String(n.commitIndex).padEnd(13)}  ${n.state}`;
+        const cls = n.state === 'dead' ? 'text-slate-500' : n.state === 'leader' ? 'text-amber-300' : 'text-slate-300';
+        adminPrint(row, cls);
+      }
+      return;
+    }
+
+    if (cmd === 'status') {
+      const state = adminGetState();
+      if (!state) { adminPrint('  simulación no iniciada', 'text-slate-500'); return; }
+      const leader = state.nodes.find(n => n.state === 'leader');
+      const total = state.nodes.length;
+      const alive = state.nodes.filter(n => n.state !== 'dead').length;
+      const majority = Math.floor(total / 2) + 1;
+      const hasQuorum = alive >= majority;
+      adminPrint(`  término clúster : ${state.term}`, 'text-slate-300');
+      adminPrint(`  líder           : ${leader ? `N${leader.id} (término ${leader.term})` : 'ninguno'}`, leader ? 'text-amber-300' : 'text-red-400');
+      adminPrint(`  quórum          : ${alive}/${total} vivos — mayoría ${majority} — ${hasQuorum ? 'OK' : 'PERDIDO'}`, hasQuorum ? 'text-green-400' : 'text-red-400');
+      if (isolatedNodes.size > 0) {
+        adminPrint(`  particionados   : ${[...isolatedNodes].map(id => `N${id}`).join(', ')}`, 'text-red-400');
+      }
+      adminPrint('  ───────────────────────────────────', 'text-slate-700');
+      for (const n of state.nodes) {
+        const isolated = isolatedNodes.has(n.id) ? ' [AISLADO]' : '';
+        const row = `  N${n.id}: ${n.state}${isolated}  term=${n.term}  log=${n.log.length}  commit=${n.commitIndex}`;
+        const cls = n.state === 'dead' ? 'text-slate-500' : n.state === 'leader' ? 'text-amber-300' : isolatedNodes.has(n.id) ? 'text-red-300' : 'text-slate-300';
+        adminPrint(row, cls);
+      }
+      return;
+    }
+
+    adminPrint(`  comando desconocido: ${cmd}  (escribe help)`, 'text-red-400');
+  }
+
+  // Mensaje de inicio del admin
+  adminPrint('  admin-clúster v1.0  —  control elevado del clúster', 'text-slate-500');
+  adminPrint('  ⚠ las mutaciones se aplican al estado vivo de la simulación', 'text-amber-900/60');
+  adminPrint('  escribe help para ver los comandos disponibles', 'text-slate-600');
+
+  adminTerminal.addEventListener('click', () => adminInput.focus());
+
+  adminInput.addEventListener('keydown', async (e: KeyboardEvent) => {
+    if (e.key !== 'Enter') return;
+    const val = adminInput.value;
+    adminInput.value = '';
+    await adminHandleCommand(val);
   });
 </script>
